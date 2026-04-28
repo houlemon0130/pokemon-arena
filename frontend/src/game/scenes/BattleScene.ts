@@ -101,7 +101,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const hpValue = pokemon.max_hp > 0 ? pokemon.current_hp / pokemon.max_hp : 0;
-    side.sprite.setPokemon(pokemon.name, spriteSide);
+    side.sprite.setPokemon(pokemon.def_id, spriteSide);
     side.hpBar.setValue(hpValue);
     side.nameText.setText(pokemon.name);
 
