@@ -1,0 +1,8 @@
+{
+  "charmander": {"charmander": 1.0, "squirtle": 0.3, "bulbasaur": 0.6, "pikachu": 0.7, "eevee": 0.2, "gengar": 0.1},
+  "squirtle": {"charmander": 0.3, "squirtle": 1.0, "bulbasaur": 0.5, "pikachu": 0.4, "eevee": 0.6, "gengar": 0.3},
+  "bulbasaur": {"charmander": 0.6, "squirtle": 0.5, "bulbasaur": 1.0, "pikachu": 0.5, "eevee": 0.4, "gengar": 0.2},
+  "pikachu": {"charmander": 0.7, "squirtle": 0.4, "bulbasaur": 0.5, "pikachu": 1.0, "eevee": 0.5, "gengar": 0.2},
+  "eevee": {"charmander": 0.2, "squirtle": 0.6, "bulbasaur": 0.4, "pikachu": 0.5, "eevee": 1.0, "gengar": 0.1},
+  "gengar": {"charmander": 0.1, "squirtle": 0.3, "bulbasaur": 0.2, "pikachu": 0.2, "eevee": 0.1, "gengar": 1.0}
+}
