@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import type {
   AgentDecision,
+  BenchOpinion,
   BattlePokemon,
   BattleStateV2,
   BattleTeam,
@@ -94,8 +95,10 @@ export function useBattleSocket(battleId: string | null | undefined) {
             s.addReflection(message.data as ReflectionResult);
             break;
           case "chat_message":
-          case "bench_opinion":
             s.addChatMessage(message.data as ChatMessage);
+            break;
+          case "bench_opinion":
+            s.addChatMessage(benchOpinionToChatMessage(message.data as BenchOpinion));
             break;
           case "battle_started":
             s.setBattleState(message.data as BattleStateV2);
@@ -154,4 +157,14 @@ export function useBattleSocket(battleId: string | null | undefined) {
   }, []);
 
   return { sendMessage, socketRef };
+}
+
+export function benchOpinionToChatMessage(opinion: BenchOpinion): ChatMessage {
+  return {
+    turn: opinion.turn,
+    from_agent: `bench:${opinion.pokemon_id}`,
+    channel: "bench",
+    content: opinion.message,
+    emotion: `battle_lust:${opinion.battle_lust.toFixed(2)}`,
+  };
 }

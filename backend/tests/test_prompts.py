@@ -33,7 +33,7 @@ def _moves():
     ]
 
 
-def _pokemon(name="Charmander", types=None, personality=None):
+def _pokemon(name="Charmander", types=None, personality=None, status=None):
     return BattlePokemon(
         def_id=name.lower(),
         name=name,
@@ -43,6 +43,7 @@ def _pokemon(name="Charmander", types=None, personality=None):
         personality=personality or _personality(),
         current_hp=100,
         max_hp=120,
+        status=status,
     )
 
 
@@ -93,8 +94,36 @@ def test_bench_prompts_include_analysis_focus_and_battle_lust():
     turn_msg = build_bench_turn_message(bench, _pokemon(), _pokemon("Squirtle", ["water"]), 0.72, 4)
     assert "观战" in system_prompt
     assert "分析" in system_prompt
-    assert "上场欲望:72%" in turn_msg
+    assert "自己的上场欲望值(0-1):0.72" in turn_msg
     assert "Squirtle" in turn_msg
+
+
+def test_bench_turn_message_contains_battle_state_desire_and_personality():
+    bench = _pokemon(
+        "妙蛙种子",
+        ["grass", "poison"],
+        _personality("clever", aggression=0.5),
+        status="poison",
+    )
+    active = _pokemon("小火龙", ["fire"], status="burn")
+    opponent = _pokemon("杰尼龟", ["water"], status="sleep")
+
+    msg = build_bench_turn_message(bench, active, opponent, 0.34, 5)
+
+    assert "场上队友: 小火龙 (fire) HP:100/120 状态:burn" in msg
+    assert "对手: 杰尼龟 (water) HP:100/120 状态:sleep" in msg
+    assert "自己的上场欲望值(0-1):0.34" in msg
+    assert "自己的性格描述: 聪明而策略性；优先分析属性克制。" in msg
+
+
+def test_bench_system_prompt_contains_distinct_personality_examples():
+    prompt = build_bench_system_prompt(_pokemon("皮卡丘", ["electric"], _personality("playful", aggression=0.7)))
+
+    assert "让我上让我上！小火龙看起来好欺负！" in prompt
+    assert "根据属性分析，此时换我上场胜率提升34%" in prompt
+    assert "冷静，别急" in prompt
+    assert "我不行我不行" in prompt
+    assert "阴森嘲讽" in prompt
 
 
 def test_chat_prompt_contains_voice_and_goal():

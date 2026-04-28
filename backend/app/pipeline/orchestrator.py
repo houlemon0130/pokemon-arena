@@ -1,5 +1,6 @@
 import asyncio
 
+from app.agents.prompts.bench import build_bench_system_prompt, build_bench_turn_message
 from app.agents.reflection import run_reflection
 from app.behavior.battle_lust import accumulate_battle_lust
 from app.behavior.opponent_model import OpponentModel
@@ -27,11 +28,7 @@ class TurnOrchestrator:
         self.turn += 1
 
         await self.ws.broadcast({"type": "phase_change", "data": {"phase": "bench_observe"}})
-        bench_results = await asyncio.gather(
-            *(self._run_bench_agent(bench_pokemon) for bench_pokemon in self.opponent_team["bench"])
-        )
-
-        for bench_pokemon, result in zip(self.opponent_team["bench"], bench_results):
+        for bench_pokemon in self.opponent_team["bench"]:
             bench_pokemon["battle_lust"] = accumulate_battle_lust(
                 bench_pokemon.get("battle_lust", 0.3),
                 bench_pokemon["types"][0],
@@ -39,6 +36,11 @@ class TurnOrchestrator:
                 self.opponent_team["active"]["current_hp"] < self.opponent_team["active"]["max_hp"] * 0.3,
                 self.opponent_team["active"]["status"] is not None,
             )
+        bench_results = await asyncio.gather(
+            *(self._run_bench_agent(bench_pokemon) for bench_pokemon in self.opponent_team["bench"])
+        )
+
+        for result in bench_results:
             await self.ws.broadcast({"type": "bench_opinion", "data": result})
 
         await self.ws.broadcast({"type": "phase_change", "data": {"phase": "trainer_strategy"}})
@@ -72,10 +74,30 @@ class TurnOrchestrator:
             raise ValueError(f"invalid_{actor}_move_index")
 
     async def _run_bench_agent(self, bench_pokemon: dict) -> dict:
+        battle_lust = bench_pokemon.get("battle_lust", 0.3)
+        raw = await call_llm(
+            [
+                {"role": "system", "content": build_bench_system_prompt(bench_pokemon)},
+                {
+                    "role": "user",
+                    "content": build_bench_turn_message(
+                        bench_pokemon,
+                        self.opponent_team["active"],
+                        self.player_team["active"],
+                        battle_lust,
+                        self.turn,
+                    ),
+                },
+            ],
+            temperature=0.8,
+            max_tokens=100,
+            json_mode=False,
+        )
+        message = raw.get("content", "").strip() if isinstance(raw, dict) else str(raw).strip()
         return {
             "pokemon_id": bench_pokemon["def_id"],
-            "battle_lust": bench_pokemon.get("battle_lust", 0.3),
-            "message": "我在观察局势。",
+            "battle_lust": battle_lust,
+            "message": message or "我还在观察局势。",
         }
 
     async def _run_trainer_agent(self, bench_results: list[dict]) -> dict:

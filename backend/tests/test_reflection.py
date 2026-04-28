@@ -35,6 +35,20 @@ def _team():
     }
 
 
+def _personality(name="顽皮", voice="顽皮而好动", modifier="喜欢主动请战。"):
+    return {
+        "id": "playful",
+        "name": name,
+        "aggression": 0.7,
+        "risk_tolerance": 0.8,
+        "obedience_mult": 0.8,
+        "fear_mult": 0.7,
+        "battle_lust_base": 0.6,
+        "prompt_modifier": modifier,
+        "narrative_voice": voice,
+    }
+
+
 @pytest.mark.asyncio
 async def test_run_reflection_returns_valid_structure(monkeypatch):
     async def fake_call_llm(*args, **kwargs):
@@ -58,6 +72,66 @@ async def test_run_reflection_returns_valid_structure(monkeypatch):
     assert result["turn"] == 1
     assert result["decision_was_correct"] is True
     assert result["confidence_adjustment"] == 0.05
+
+
+@pytest.mark.asyncio
+async def test_bench_agent_calls_llm_with_stateful_prompt(monkeypatch):
+    ws = _WsRecorder()
+    opponent_team = {
+        "active": {
+            "def_id": "charmander",
+            "name": "小火龙",
+            "types": ["fire"],
+            "current_hp": 35,
+            "max_hp": 120,
+            "status": "burn",
+            "personality": _personality("勇敢", "大胆而自信", "偏爱进攻。"),
+        },
+        "bench": [],
+    }
+    player_team = {
+        "active": {
+            "def_id": "squirtle",
+            "name": "杰尼龟",
+            "types": ["water"],
+            "current_hp": 100,
+            "max_hp": 127,
+            "status": None,
+            "personality": _personality("沉稳", "冷静而沉稳", "等待合适时机。"),
+        },
+        "bench": [],
+    }
+    bench = {
+        "def_id": "pikachu",
+        "name": "皮卡丘",
+        "types": ["electric"],
+        "battle_lust": 0.83,
+        "status": "paralysis",
+        "personality": _personality(),
+    }
+    orchestrator = TurnOrchestrator(opponent_team, player_team, ws)
+    captured = {}
+
+    async def fake_call_llm(messages, **kwargs):
+        captured["messages"] = messages
+        captured["kwargs"] = kwargs
+        return {"content": "让我上让我上！杰尼龟看起来好欺负！"}
+
+    monkeypatch.setattr("app.pipeline.orchestrator.call_llm", fake_call_llm)
+
+    result = await orchestrator._run_bench_agent(bench)
+
+    assert result == {
+        "pokemon_id": "pikachu",
+        "battle_lust": 0.83,
+        "message": "让我上让我上！杰尼龟看起来好欺负！",
+    }
+    assert captured["kwargs"] == {"temperature": 0.8, "max_tokens": 100, "json_mode": False}
+    prompt_text = "\n".join(message["content"] for message in captured["messages"])
+    assert "场上队友: 小火龙 (fire) HP:35/120 状态:burn" in prompt_text
+    assert "对手: 杰尼龟 (water) HP:100/127 状态:正常" in prompt_text
+    assert "自己的上场欲望值(0-1):0.83" in prompt_text
+    assert "自己的性格描述: 顽皮而好动；喜欢主动请战。" in prompt_text
 
 
 @pytest.mark.asyncio

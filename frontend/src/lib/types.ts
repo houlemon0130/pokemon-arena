@@ -112,6 +112,13 @@ export type AgentInternalState = {
   last_emotion?: string;
 };
 
+export type BenchOpinion = {
+  pokemon_id: string;
+  message: string;
+  battle_lust: number;
+  turn?: number;
+};
+
 export type ReflectionResult = {
   agent_id: string;
   turn?: number;
