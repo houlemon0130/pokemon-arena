@@ -55,15 +55,10 @@ export function applyTurnResultToBattleState(
 export function useBattleSocket(battleId: string | null | undefined) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const {
-    addAgentDecision,
-    addToolCall,
-    addReflection,
-    addChatMessage,
-    addBattleLog,
-    setAgentThinking,
-    setBattleState,
-  } = useBattleStore();
+  // Get actions from the store directly — they are stable references
+  const storeActions = useRef(useBattleStore.getState());
+  useEffect(() => { storeActions.current = useBattleStore.getState(); });
+  const getStore = () => storeActions.current;
 
   useEffect(() => {
     if (!battleId) {
@@ -81,38 +76,39 @@ export function useBattleSocket(battleId: string | null | undefined) {
       };
 
       socket.onmessage = (event) => {
+        const s = getStore();
         const message = JSON.parse(event.data) as BattleSocketMessage;
         switch (message.type) {
           case "phase_change":
-            addBattleLog(`Phase: ${(message.data as { phase?: string })?.phase ?? "unknown"}`);
-            setAgentThinking(true);
+            s.addBattleLog(`Phase: ${(message.data as { phase?: string })?.phase ?? "unknown"}`);
+            s.setAgentThinking(true);
             break;
           case "agent_decision":
-            addAgentDecision(message.data as AgentDecision);
-            setAgentThinking(false);
+            s.addAgentDecision(message.data as AgentDecision);
+            s.setAgentThinking(false);
             break;
           case "tool_call":
-            addToolCall(message.data as ToolCall);
+            s.addToolCall(message.data as ToolCall);
             break;
           case "reflection_result":
-            addReflection(message.data as ReflectionResult);
+            s.addReflection(message.data as ReflectionResult);
             break;
           case "chat_message":
           case "bench_opinion":
-            addChatMessage(message.data as ChatMessage);
+            s.addChatMessage(message.data as ChatMessage);
             break;
           case "battle_started":
-            setBattleState(message.data as BattleStateV2);
-            addBattleLog("Battle started");
+            s.setBattleState(message.data as BattleStateV2);
+            s.addBattleLog("Battle started");
             break;
           case "turn_result":
-            setAgentThinking(false);
+            s.setAgentThinking(false);
             {
               const result = message.data as TurnResult | undefined;
               if (result) {
                 const currentState = useBattleStore.getState().battleState;
-                setBattleState(applyTurnResultToBattleState(currentState, result));
-                result.events.forEach((event) => addBattleLog(event));
+                s.setBattleState(applyTurnResultToBattleState(currentState, result));
+                result.events.forEach((event) => s.addBattleLog(event));
               }
             }
             break;
@@ -120,13 +116,13 @@ export function useBattleSocket(battleId: string | null | undefined) {
             {
               const endedState = message.data as BattleStateV2 | undefined;
               if (endedState) {
-                setBattleState(endedState);
+                s.setBattleState(endedState);
               }
-              addBattleLog(`Winner: ${endedState?.winner ?? "unknown"}`);
+              s.addBattleLog(`Winner: ${endedState?.winner ?? "unknown"}`);
             }
             break;
           case "error":
-            addBattleLog(message.message ?? "WebSocket error");
+            s.addBattleLog(message.message ?? "WebSocket error");
             break;
           default:
             break;
@@ -149,16 +145,7 @@ export function useBattleSocket(battleId: string | null | undefined) {
       }
       socketRef.current?.close();
     };
-  }, [
-    battleId,
-    addAgentDecision,
-    addToolCall,
-    addReflection,
-    addChatMessage,
-    addBattleLog,
-    setAgentThinking,
-    setBattleState,
-  ]);
+  }, [battleId]);
 
   const sendMessage = useCallback((message: Record<string, unknown>) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {

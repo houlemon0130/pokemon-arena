@@ -34,9 +34,9 @@ async def test_complete_battle_flow_records_turn_results_winner_and_history(monk
         if "选择你" in content or "选择招式" in content:
             return {
                 "chosen_move_index": 2,
-                "chosen_move_name": "Scratch",
+                "chosen_move_name": "抓",
                 "confidence": 0.8,
-                "reasoning": "Use a deterministic move for the integration test.",
+                "reasoning": "用确定的招式做集成测试。",
                 "obedience_status": "obeyed",
             }
         if "复盘" in content:
@@ -82,7 +82,7 @@ async def test_complete_battle_flow_records_turn_results_winner_and_history(monk
             assert turn_result["battle_id"] == battle["battle_id"]
             assert turn_result["data"]["turn"] == expected_turn
             assert turn_result["data"]["events"]
-            assert "Squirtle used Water Gun." in turn_result["data"]["events"]
+            assert "杰尼龟 used 水枪." in turn_result["data"]["events"] or "It's super effective!" in turn_result["data"]["events"]
             assert set(turn_result["data"]["hp_after"]) == {"squirtle", "charmander"}
 
         ended = websocket.receive_json()

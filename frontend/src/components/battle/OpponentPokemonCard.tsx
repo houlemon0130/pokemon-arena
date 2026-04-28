@@ -13,7 +13,7 @@ export function OpponentPokemonCard({ name, hp, maxHp, status }: OpponentPokemon
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-zinc-100">{name}</h2>
-          <p className="mt-1 text-xs text-zinc-400">Opponent active</p>
+          <p className="mt-1 text-xs text-zinc-400">对手上场宝可梦</p>
         </div>
         {status ? <span className="rounded bg-violet-400/15 px-2 py-1 text-xs text-violet-200">{status}</span> : null}
       </div>

@@ -20,7 +20,7 @@ export default function Home() {
         setPokemon(items);
         setSelectedIds(items.slice(0, 3).map((item) => item.id));
       })
-      .catch(() => setError("Unable to load Pokemon roster."));
+      .catch(() => setError("无法加载宝可梦列表。"));
   }, []);
 
   const activePokemon = useMemo(
@@ -50,7 +50,7 @@ export default function Home() {
       const battle = await createBattle(selectedIds[0], selectedIds.slice(1), ["gengar", "pikachu", "eevee"]);
       router.push(`/battle/${battle.battle_id}`);
     } catch {
-      setError("Unable to start battle.");
+      setError("无法开始对战。");
       setIsStarting(false);
     }
   };
@@ -59,14 +59,14 @@ export default function Home() {
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-5 py-6 sm:px-8">
       <header className="flex flex-col gap-4 border-b border-zinc-800 pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-zinc-50">Pokemon Arena</h1>
+          <h1 className="text-3xl font-semibold text-zinc-50">宝可梦竞技场</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            Choose three Pokemon. The first selected Pokemon starts on the field; the other two advise from the bench.
+            选择三只宝可梦。第一只上场对战，其余两只在板凳上提供建议。
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-sm text-zinc-400">
-            Active: <span className="font-medium text-zinc-100">{activePokemon?.name ?? "None"}</span>
+            上场: <span className="font-medium text-zinc-100">{activePokemon?.name ?? "无"}</span>
           </div>
           <button
             type="button"
@@ -74,7 +74,7 @@ export default function Home() {
             disabled={selectedIds.length !== 3 || isStarting}
             className="h-10 rounded bg-emerald-400 px-4 text-sm font-semibold text-zinc-950 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
           >
-            {isStarting ? "Starting..." : "Start Battle"}
+            {isStarting ? "准备中..." : "开始对战"}
           </button>
         </div>
       </header>

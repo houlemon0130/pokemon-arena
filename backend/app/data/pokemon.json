@@ -1,50 +1,136 @@
 {
   "charmander": {
     "id": "charmander",
-    "name": "Charmander",
-    "types": ["fire"],
-    "stats": {"hp": 120, "attack": 95, "defense": 78, "sp_attack": 109, "sp_defense": 85, "speed": 100},
-    "moves": ["ember", "flamethrower", "scratch", "growl"],
+    "name": "小火龙",
+    "types": [
+      "fire"
+    ],
+    "stats": {
+      "hp": 120,
+      "attack": 95,
+      "defense": 78,
+      "sp_attack": 109,
+      "sp_defense": 85,
+      "speed": 100
+    },
+    "moves": [
+      "ember",
+      "flamethrower",
+      "scratch",
+      "growl"
+    ],
     "personality": "brave"
   },
   "squirtle": {
     "id": "squirtle",
-    "name": "Squirtle",
-    "types": ["water"],
-    "stats": {"hp": 127, "attack": 83, "defense": 121, "sp_attack": 100, "sp_defense": 110, "speed": 78},
-    "moves": ["water_gun", "hydro_pump", "tackle", "withdraw"],
+    "name": "杰尼龟",
+    "types": [
+      "water"
+    ],
+    "stats": {
+      "hp": 127,
+      "attack": 83,
+      "defense": 121,
+      "sp_attack": 100,
+      "sp_defense": 110,
+      "speed": 78
+    },
+    "moves": [
+      "water_gun",
+      "hydro_pump",
+      "tackle",
+      "withdraw"
+    ],
     "personality": "calm"
   },
   "bulbasaur": {
     "id": "bulbasaur",
-    "name": "Bulbasaur",
-    "types": ["grass", "poison"],
-    "stats": {"hp": 125, "attack": 89, "defense": 89, "sp_attack": 105, "sp_defense": 105, "speed": 85},
-    "moves": ["vine_whip", "razor_leaf", "sleep_powder", "leech_seed"],
+    "name": "妙蛙种子",
+    "types": [
+      "grass",
+      "poison"
+    ],
+    "stats": {
+      "hp": 125,
+      "attack": 89,
+      "defense": 89,
+      "sp_attack": 105,
+      "sp_defense": 105,
+      "speed": 85
+    },
+    "moves": [
+      "vine_whip",
+      "razor_leaf",
+      "sleep_powder",
+      "leech_seed"
+    ],
     "personality": "clever"
   },
   "pikachu": {
     "id": "pikachu",
-    "name": "Pikachu",
-    "types": ["electric"],
-    "stats": {"hp": 110, "attack": 95, "defense": 70, "sp_attack": 100, "sp_defense": 80, "speed": 130},
-    "moves": ["thunderbolt", "thunder_shock", "quick_attack", "thunder_wave"],
+    "name": "皮卡丘",
+    "types": [
+      "electric"
+    ],
+    "stats": {
+      "hp": 110,
+      "attack": 95,
+      "defense": 70,
+      "sp_attack": 100,
+      "sp_defense": 80,
+      "speed": 130
+    },
+    "moves": [
+      "thunderbolt",
+      "thunder_shock",
+      "quick_attack",
+      "thunder_wave"
+    ],
     "personality": "playful"
   },
   "eevee": {
     "id": "eevee",
-    "name": "Eevee",
-    "types": ["normal"],
-    "stats": {"hp": 130, "attack": 95, "defense": 85, "sp_attack": 80, "sp_defense": 105, "speed": 90},
-    "moves": ["tackle", "double_edge", "sand_attack", "helping_hand"],
+    "name": "伊布",
+    "types": [
+      "normal"
+    ],
+    "stats": {
+      "hp": 130,
+      "attack": 95,
+      "defense": 85,
+      "sp_attack": 80,
+      "sp_defense": 105,
+      "speed": 90
+    },
+    "moves": [
+      "tackle",
+      "double_edge",
+      "sand_attack",
+      "helping_hand"
+    ],
     "personality": "timid"
   },
   "gengar": {
     "id": "gengar",
-    "name": "Gengar",
-    "types": ["ghost", "poison"],
-    "stats": {"hp": 115, "attack": 75, "defense": 80, "sp_attack": 130, "sp_defense": 95, "speed": 120},
-    "moves": ["shadow_ball", "hypnosis", "confuse_ray", "lick"],
+    "name": "耿鬼",
+    "types": [
+      "ghost",
+      "poison"
+    ],
+    "stats": {
+      "hp": 115,
+      "attack": 75,
+      "defense": 80,
+      "sp_attack": 130,
+      "sp_defense": 95,
+      "speed": 120
+    },
+    "moves": [
+      "shadow_ball",
+      "hypnosis",
+      "confuse_ray",
+      "lick"
+    ],
     "personality": "mysterious"
   }
 }
