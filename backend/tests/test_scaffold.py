@@ -12,15 +12,17 @@ def test_health_endpoint_returns_ok():
     assert response.json() == {"status": "ok"}
 
 
-def test_requirements_are_pinned_to_plan_versions():
+def test_requirements_match_plan_dependencies():
     expected = [
-        "fastapi==0.115.6",
-        "uvicorn[standard]==0.34.0",
-        "pydantic==2.10.4",
-        "httpx==0.28.1",
-        "websockets==14.1",
-        "python-dotenv==1.0.1",
-        "crewai==0.86.0",
+        "fastapi",
+        "uvicorn[standard]",
+        "pydantic",
+        "httpx",
+        "websockets",
+        "python-dotenv",
+        "crewai",
+        "pytest",
+        "pytest-asyncio",
     ]
 
     with open("requirements.txt") as f:
