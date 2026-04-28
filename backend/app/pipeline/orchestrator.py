@@ -79,28 +79,42 @@ class TurnOrchestrator:
         }
 
     async def _run_trainer_agent(self, bench_results: list[dict]) -> dict:
-        return await call_llm(
-            [
-                {
-                    "role": "user",
-                    "content": f"根据板凳意见给出训练师指令: {bench_results}",
-                }
-            ],
-            temperature=0.6,
-            max_tokens=300,
+        active = self.opponent_team["active"]
+        player = self.player_team["active"]
+        moves = active["moves"]
+        move_list = "\n".join(
+            f"  [{i}] {m['name']}({m['type']}, 威力:{m.get('power','-')})"
+            for i, m in enumerate(moves)
         )
+        prompt = f"""你是对手训练师。场上情况：
+你的宝可梦: {active['name']}({'/'.join(active['types'])}) HP:{active['current_hp']}/{active['max_hp']}
+玩家宝可梦: {player['name']}({'/'.join(player['types'])}) HP:{player['current_hp']}/{player['max_hp']}
+可用招式:
+{move_list}
+板凳意见: {bench_results}
+
+请给出训练师指令，以JSON格式输出：
+{{"suggested_move": "招式名", "strategy": "aggressive/defensive/status", "reasoning": "你的策略分析(中文)"}}"""
+        return await call_llm([{"role": "user", "content": prompt}], temperature=0.6, max_tokens=300)
 
     async def _run_pokemon_agent(self, trainer_decision: dict) -> dict:
-        return await call_llm(
-            [
-                {
-                    "role": "user",
-                    "content": f"根据训练师指令选择招式: {trainer_decision}",
-                }
-            ],
-            temperature=0.7,
-            max_tokens=300,
+        active = self.opponent_team["active"]
+        player = self.player_team["active"]
+        moves = active["moves"]
+        move_list = "\n".join(
+            f"  [{i}] {m['name']}({m['type']}, 威力:{m.get('power','-')})"
+            for i, m in enumerate(moves)
         )
+        prompt = f"""你是{active['name']}，一只{'/'.join(active['types'])}宝可梦。
+你的HP:{active['current_hp']}/{active['max_hp']}
+对手{player['name']}({'/'.join(player['types'])}) HP:{player['current_hp']}/{player['max_hp']}
+训练师指令: {trainer_decision.get('suggested_move','无')} (策略:{trainer_decision.get('strategy','未知')})
+你的招式:
+{move_list}
+
+选择你要使用的招式，以JSON格式输出：
+{{"chosen_move_index": 0, "chosen_move_name": "招式名", "confidence": 0.85, "reasoning": "你的决策理由(中文)", "obedience_status": "obeyed/modified/defied"}}"""
+        return await call_llm([{"role": "user", "content": prompt}], temperature=0.7, max_tokens=300)
 
     def _resolve_turn(self, player_move_index: int, agent_move_index: int):
         player_mon = self._as_battle_pokemon(self.player_team["active"])

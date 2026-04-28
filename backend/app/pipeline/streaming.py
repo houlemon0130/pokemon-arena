@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 import httpx
 
 BAILIAN_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-BAILIAN_MODEL = "deepseek-v4-pro"
+BAILIAN_MODEL = "deepseek-v4-flash"
 
 
 async def stream_llm(
@@ -20,6 +20,7 @@ async def stream_llm(
         "temperature": temperature,
         "max_tokens": max_tokens,
         "stream": True,
+        "thinking": {"type": "disabled"},
     }
     async with httpx.AsyncClient(timeout=60.0) as client:
         async with client.stream(
@@ -56,9 +57,15 @@ async def call_llm(
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "thinking": {"type": "disabled"},
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+        # DeepSeek API requires the word 'json' in messages when using json_object format
+        has_json_hint = any("json" in str(m.get("content", "")).lower() for m in messages)
+        if not has_json_hint:
+            messages = [{"role": "system", "content": "请以JSON格式回复。"}] + messages
+            payload["messages"] = messages
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(

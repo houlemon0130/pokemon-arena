@@ -31,7 +31,7 @@ def test_start_battle_with_unknown_battle_id_returns_error():
 async def test_complete_battle_flow_records_turn_results_winner_and_history(monkeypatch):
     async def fake_call_llm(messages, temperature=0.7, max_tokens=500, json_mode=True):
         content = messages[0]["content"]
-        if "选择招式" in content:
+        if "选择你" in content or "选择招式" in content:
             return {
                 "chosen_move_index": 2,
                 "chosen_move_name": "Scratch",

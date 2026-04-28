@@ -11,6 +11,13 @@ def _is_fainted(pokemon: BattlePokemon) -> bool:
     return pokemon.current_hp <= 0
 
 
+def _parse_effect(effect: str) -> tuple[str | None, float]:
+    if ":" in effect:
+        name, pct = effect.split(":")
+        return name, int(pct) / 100.0
+    return effect, 1.0
+
+
 def _critical_multiplier() -> float:
     return 1.5 if random.random() < 0.0625 else 1.0
 
@@ -47,13 +54,16 @@ def _apply_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef,
 
     events.append(f"{attacker.name} used {move.name}.")
     if move.category == "status":
-        if move.effect in {"burn", "paralysis", "sleep", "confusion"}:
-            previous_status = defender.status
-            defender.status = try_apply_status(defender.status, move.effect)
-            if defender.status != previous_status:
-                events.append(f"{defender.name} is now {defender.status}.")
-            else:
-                events.append(f"{move.name} had no effect.")
+        effect = move.effect
+        if effect:
+            status_name, chance = _parse_effect(effect)
+            if status_name and status_name in {"burn", "paralysis", "sleep", "confusion"}:
+                previous_status = defender.status
+                defender.status = try_apply_status(defender.status, status_name, chance)
+                if defender.status != previous_status and defender.status is not None:
+                    events.append(f"{defender.name} is now {defender.status}.")
+                elif defender.status == previous_status and previous_status is not None:
+                    events.append(f"{move.name} had no effect.")
         return 0
 
     if move.power is None:
