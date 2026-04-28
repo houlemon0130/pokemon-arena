@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 
 import { ActivePokemonPanel } from "@/components/battle/ActivePokemonPanel";
 import { BattleEndOverlay } from "@/components/battle/BattleEndOverlay";
+import { BattleCanvas } from "@/components/battle/BattleCanvas";
 import { BattleLog } from "@/components/battle/BattleLog";
 import { BenchPanel } from "@/components/battle/BenchPanel";
 import { CrossTalkPanel } from "@/components/battle/CrossTalkPanel";
@@ -42,7 +43,9 @@ export default function BattlePage() {
           <PlayerPokemonCard name="Charmander" hp={120} maxHp={120} status={null} fear={0} />
           <MoveSelector moves={DEFAULT_MOVES} selectedMove={selectedMove} onSelect={setSelectedMove} />
         </aside>
-        <section className="min-h-[520px] rounded-lg border border-zinc-800 bg-black" />
+        <section className="min-h-[520px] rounded-lg border border-zinc-800 bg-black">
+          <BattleCanvas />
+        </section>
         <aside className="space-y-4">
           <TrainerMindPanel />
           <ActivePokemonPanel />
