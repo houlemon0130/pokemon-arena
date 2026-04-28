@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pokemon Arena — Design Spec v2</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: #0a0a0a; color: #d0d0d0; max-width: 1000px; margin: 0 auto; padding: 40px 20px; line-height: 1.7; font-size: 14px; }
+  h1 { color: #f39c12; border-bottom: 2px solid #f39c12; padding-bottom: 12px; font-size: 26px; }
+  h2 { color: #e67e22; margin-top: 40px; border-bottom: 1px solid #333; padding-bottom: 8px; font-size: 20px; }
+  h3 { color: #3498db; margin-top: 28px; font-size: 16px; }
+  code { background: #16213e; padding: 2px 6px; border-radius: 4px; color: #f1c40f; font-size: 13px; }
+  pre { background: #16213e; padding: 16px; border-radius: 8px; overflow-x: auto; border: 1px solid #0f3460; line-height: 1.4; }
+  pre code { background: none; padding: 0; color: #d0d0d0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  th { background: #16213e; color: #f39c12; padding: 10px; text-align: left; }
+  td { padding: 8px 10px; border-bottom: 1px solid #1a1a2e; vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(15, 52, 96, 0.3); }
+  p { margin: 8px 0; }
+  strong { color: #fff; }
+  a { color: #3498db; }
+  div[style] { padding: 12px; border-radius: 8px; margin: 12px 0; }
+  hr { border: none; border-top: 1px solid #1a1a2e; margin: 30px 0; }
+  @media (max-width: 800px) { body { padding: 20px 12px; } }
+</style>
+</head>
+<body>
+<h1>AI Pokemon Battle Arena — Design Spec v2</h1>
+<br>
+<p><strong>Date</strong>: 2026-04-27</p>
+<p><strong>Author</strong>: Jay</p>
+<p><strong>Status</strong>: Draft v2 — Multi-Agent Architecture</p>
+<br>
+<h2> Purpose</h2>
+<br>
+<p>A browser-based Pokemon battle simulator where the player controls their Pokemon manually, while the AI opponent is a <strong>multi-agent system</strong>: a Trainer Agent (Leader) commands a team of Pokemon Agents (Workers), each with independent personality, internal psychological state, and the ability to communicate, negotiate, and even disobey.</p>
+<br>
+<p>This is a portfolio project to demonstrate multi-agent engineering capabilities for job hunting (target: 2027 Q2). The core demo value is watching multiple AI Agents interact — forming opinions, debating tactics, expressing fear, trash-talking opponents, and sometimes defying their own trainer.</p>
+<br>
+<h2> Multi-Agent Architecture</h2>
+<br>
+<h3>Technology Positioning</h3>
+<br>
+<p>本项目定位为<strong>炫技型 Portfolio</strong>。原则：用最新的 Agent 技术，但只在场景天然需要的地方用。</p>
+<br>
+<table>
+<tr><th>技术</th><th>是否用</th><th>在本项目中的表现</th></tr>
+<tr><td>**Multi-Agent Orchestration**</td><td>用</td><td>Trainer + Active + Bench ×4，CrewAI Crew</td></tr>
+<tr><td>**Tool Calling**</td><td>用</td><td>Pokemon Agent 选招前调 tool 分步推理</td></tr>
+<tr><td>**Streaming**</td><td>用</td><td>所有 Agent 思考过程流式推到前端</td></tr>
+<tr><td>**Structured Output**</td><td>用</td><td>JSON mode / Function Calling 做决策输出</td></tr>
+<tr><td>**Human-in-the-Loop**</td><td>用</td><td>PvE 本身就是 Human-AI Collaboration</td></tr>
+<tr><td>**Context Engineering**</td><td>用</td><td>Battle history + psych state + opponent model → prompt</td></tr>
+<tr><td>**Self-Reflection**</td><td>用</td><td>每回合后 Agent 复盘，跨回合影响行为</td></tr>
+<tr><td>**A2A 通信**</td><td>概念</td><td>6 条 Agent 间通信通道（队内协商 + 跨队心理战）</td></tr>
+<tr><td>**RAG / 向量检索**</td><td>不用</td><td>类型克制是 18×18 静态矩阵，无需检索</td></tr>
+<tr><td>**Multi-Modal Agent**</td><td>不用</td><td>无图片理解需求</td></tr>
+<tr><td>**Long-Running Autonomous Loop**</td><td>不用</td><td>回合制，不是持续探索场景</td></tr>
+<tr><td>**A2A 完整协议栈**</td><td>不用</td><td>Agent 同进程，无需跨服务发现和认证</td></tr>
+</table>
+<br>
+<p><div style=&quot;background:#0f3460;padding:12px;border-radius:8px;margin:12px 0&quot;&gt;</p>
+<br>
+<p><strong>面试叙事主线</strong>：&quot;我设计了一个 multi-agent battle system，Trainer 领导和 3 个 Pokemon worker 各司其职。Agent 通过 tool calling 分步推理战斗决策，队内有协商通信，训练师能跨回合建模对手行为，每回合 Agent 会自省复盘——这些都是当前 Agent 工程的主流技术在真实场景下的原生应用。&quot;</p>
+<br>
+<p>&lt;/div&gt;</p>
+<br>
+<h3>Agent Hierarchy</h3>
+<br>
+<pre><code>
+┌──────────────────────────────────────────────────────────┐
+│              Opponent Trainer Agent (Leader)               │
+│                                                            │
+│  Observes battlefield → Models opponent → Forms strategy   │
+│  Issues commands → Listens to team → Evaluates trust       │
+│  Personality: Aggressive / Balanced / Cautious              │
+└──┬────────────────┬──────────────────┬────────────────────┘
+   │ commands        │ listens          │ manages
+   ▼                 ▼                  ▼
+┌──────────┐  ┌──────────────────────────────────────────┐
+│ Active   │  │          Bench Pokemon Agents (2)          │
+│ Pokemon  │  │                                            │
+│ Agent    │  │  &quot;Let me fight! Fire beats Grass!&quot;         │
+│          │  │  &quot;Charmander you&#x27;re too aggressive...&quot;      │
+│  Executes │◄─┤  Each bench agent:                         │
+│  Obeys /  │  │  - Watches battle → Forms opinions         │
+│  Defies   │  │  - Battle Lust accumulates per turn        │
+│  Expresses│  │  - Personality drives suggestion style     │
+│  Fear     │  │  - Can plead to replace active Pokemon     │
+└──────────┘  └──────────────────────────────────────────┘
+   │
+   │  inter-team communication
+   │  (trash talk / intimidation / mind games)
+   ▼
+┌──────────────────────────────────────────────────────────────┐
+│              Player&#x27;s Team (Player controls active Pokemon)    │
+│                                                                │
+│  ┌──────────┐    ┌──────────────────────────────────────┐     │
+│  │  Active  │    │        Player Bench Pokemon           │     │
+│  │ Pokemon  │    │  (optional: also agents with opinions) │     │
+│  │ (manual) │    └──────────────────────────────────────┘     │
+│  └──────────┘                                                  │
+└──────────────────────────────────────────────────────────────┘
+</code></pre>
+<br>
+<h3>Agent Types</h3>
+<br>
+<table>
+<tr><th>Agent</th><th>Role</th><th>LLM Calls/Turn</th><th>Autonomy</th></tr>
+<tr><td>**Opponent Trainer**</td><td>Leader — strategist, opponent modeler, command issuer</td><td>1</td><td>Full</td></tr>
+<tr><td>**Opponent Active Pokemon**</td><td>Worker — move selector, command evaluator, emotional voice</td><td>1</td><td>Semi (can defy)</td></tr>
+<tr><td>**Opponent Bench Pokemon** (×2)</td><td>Observer — battle analyst, substitution pleader</td><td>1 each</td><td>Full opinion</td></tr>
+<tr><td>**Player Bench Pokemon** (×2, optional)</td><td>Observer — trash talk target, morale voice</td><td>1 each</td><td>Full opinion</td></tr>
+</table>
+<br>
+<p><strong>Total LLM calls per turn: up to 6</strong> (1 trainer + 1 active + 4 bench). Each call is independent and can run in parallel where no data dependency exists.</p>
+<br>
+<h3>Inter-Agent Communication Channels</h3>
+<br>
+<table>
+<tr><th>Channel</th><th>Participants</th><th>Content</th><th>Direction</th></tr>
+<tr><td>**Command**</td><td>Trainer → Active Pokemon</td><td>Strategy directive + suggested move</td><td>One-way</td></tr>
+<tr><td>**Feedback**</td><td>Active Pokemon → Trainer</td><td>Obedience status, HP/fear report</td><td>One-way</td></tr>
+<tr><td>**Plea**</td><td>Bench Pokemon → Trainer</td><td>Substitution request with reasoning</td><td>One-way</td></tr>
+<tr><td>**Team Chat**</td><td>All Pokemon (same team)</td><td>Tactical suggestions, encouragement, criticism</td><td>Multi-way</td></tr>
+<tr><td>**Cross-Team**</td><td>Active ↔ Opponent Active</td><td>Trash talk, intimidation, psychological warfare</td><td>Bi-directional</td></tr>
+<tr><td>**Bench Cross-Talk**</td><td>Bench ↔ Opponent Bench</td><td>Commentary, predictions, defense of teammates</td><td>Multi-way</td></tr>
+</table>
+<br>
+<p>---</p>
+<br>
+<h2> Five Pokemon Agent Behavior Systems</h2>
+<br>
+<p>Each Pokemon Agent maintains internal psychological state that evolves turn-by-turn. These systems run as pre/post hooks around the LLM call.</p>
+<br>
+<h3>1. Obedience System</h3>
+<br>
+<p>Governs whether the Pokemon follows the Trainer&#x27;s command.</p>
+<br>
+<pre><code>
+Base Obedience = 0.7 (varies by personality)
+Personality multipliers:
+  Brave:    ×0.6  (strong-willed, often defies)
+  Calm:     ×1.2  (trusts trainer&#x27;s judgment)
+  Clever:   ×1.0  (defies only with good reason)
+  Playful:  ×0.8  (defies for fun)
+  Timid:    ×1.3  (grateful for guidance)
+  Mysterious: ×0.5 (unpredictable defiance)
+
+Outcomes:
+  obey:      uses trainer&#x27;s suggested move
+  modify:    same category but different move (e.g., trainer said Flamethrower, used Ember)
+  defy:      completely self-chosen move
+</code></pre>
+<br>
+<h3>2. Battle Lust System</h3>
+<br>
+<p>How badly a bench Pokemon wants to enter the battle.</p>
+<br>
+<pre><code>
+Battle Lust starts at personality base:
+  Brave: 0.5, Calm: 0.3, Clever: 0.3, Playful: 0.6, Timid: 0.1, Mysterious: 0.4
+
+Accumulates per turn:
+  +0.15  Opponent weak to own type
+  +0.20  Active teammate HP &lt; 30%
+  +0.10  Active teammate has status condition
+  +0.05  Trainer&#x27;s strategy matches own style
+  -0.10  Opponent counters own type
+
+Thresholds:
+  ≥ 0.5: mentions desire in team chat
+  ≥ 0.7: formally pleads to Trainer for substitution
+  = 1.0: demands to be switched in (may cause tension)
+</code></pre>
+<br>
+<h3>3. Fear System</h3>
+<br>
+<p>The active Pokemon&#x27;s willingness to continue fighting.</p>
+<br>
+<pre><code>
+Fear starts at 0.0, modified by personality multiplier:
+  Brave: ×0.3, Calm: ×0.5, Clever: ×0.6, Playful: ×0.7, Mysterious: ×0.4, Timid: ×1.5
+
+Accumulates:
+  +0.30  Hit by super-effective move
+  +0.20  Critical hit received
+  +0.15  HP &lt; 30% (per turn while low)
+  +0.10  Burn damage tick
+  +0.15  Opponent trash talk successful
+  +0.40  Teammate faints (future)
+  
+Decays:
+  -0.10  Successfully landed a super-effective hit
+  -0.05  Trainer encouragement received
+
+Expression thresholds:
+  ≥ 0.3: expresses unease in team chat
+  ≥ 0.5: suggests switching out to Trainer
+  ≥ 0.7: only uses defensive/status moves (refuses attack commands)
+  ≥ 0.9: attempts to flee → forced switch (or loss if no bench available)
+</code></pre>
+<br>
+<h3>4. Social Dynamics</h3>
+<br>
+<p>Relationship graph between all Pokemon on a team.</p>
+<br>
+<pre><code class="language-python">
+# Initial bonds (0.0 = neutral, 1.0 = strong bond)
+social_graph = {
+    &quot;charmander&quot;: {&quot;bulbasaur&quot;: 0.6, &quot;squirtle&quot;: 0.3, &quot;pikachu&quot;: 0.7, &quot;eevee&quot;: 0.2, &quot;gengar&quot;: 0.1},
+    &quot;squirtle&quot;:   {&quot;charmander&quot;: 0.3, &quot;bulbasaur&quot;: 0.5, &quot;pikachu&quot;: 0.4, &quot;eevee&quot;: 0.6, &quot;gengar&quot;: 0.3},
+    # ... etc
+}
+</code></pre>
+<br>
+<p>Effects:</p>
+<p>- Higher bond → suggestions from this Pokemon weighted more heavily in active Pokemon&#x27;s decision</p>
+<p>- Higher bond → encouragement more effective at reducing fear</p>
+<p>- Low bond → criticism, dismissal, and sarcasm more likely</p>
+<p>- Bonds evolve over time based on shared battle experience (Phase 2)</p>
+<br>
+<h3>5. Opponent Model (Trainer)</h3>
+<br>
+<p>The Trainer Agent tracks player behavior across turns:</p>
+<br>
+<pre><code>
+Tracked patterns:
+  - Move type distribution (attack vs status ratio)
+  - Risk tolerance (uses high-risk moves when?)
+  - Predictability (same move repeated?)
+  - HP thresholds (changes behavior at what HP?)
+
+Output per turn:
+  predicted_next_move_type: &quot;attack&quot; | &quot;status&quot; | &quot;defense&quot;
+  predicted_risk_level: 0.0-1.0
+  confidence: 0.0-1.0
+
+Injected into Trainer&#x27;s strategy prompt as context.
+</code></pre>
+<br>
+<p>---</p>
+<br>
+<h2> Tool Calling — Agent 的分步推理</h2>
+<br>
+<p>每个 Pokemon Agent 在最终选招之前，可以调用 Tool 分步推理。这不是硬塞——人类玩家脑子里就在做这些计算。把它显式化成 tool call，中间结果可以流式展示在前端，观众看得到 Agent &quot;在做功课&quot;。</p>
+<br>
+<h3>Tool Registry</h3>
+<br>
+<pre><code class="language-python">
+# 所有 Agent 共享的 Tool 集合
+TOOLS = {
+    &quot;check_type_effectiveness&quot;: {
+        &quot;description&quot;: &quot;查询攻击属性对防御属性的克制倍率&quot;,
+        &quot;parameters&quot;: {&quot;move_type&quot;: &quot;string&quot;, &quot;defender_types&quot;: &quot;list[string]&quot;},
+        &quot;returns&quot;: {&quot;multiplier&quot;: &quot;float&quot;, &quot;effect_text&quot;: &quot;string&quot;},  # 2.0, &quot;效果拔群&quot;
+    },
+    &quot;estimate_damage&quot;: {
+        &quot;description&quot;: &quot;估算技能对目标造成的伤害范围&quot;,
+        &quot;parameters&quot;: {&quot;move_name&quot;: &quot;string&quot;, &quot;attacker_stats&quot;: &quot;Stats&quot;, &quot;defender_stats&quot;: &quot;Stats&quot;, &quot;is_stab&quot;: &quot;bool&quot;},
+        &quot;returns&quot;: {&quot;min_damage&quot;: &quot;int&quot;, &quot;max_damage&quot;: &quot;int&quot;, &quot;expected&quot;: &quot;float&quot;},
+    },
+    &quot;check_pp_remaining&quot;: {
+        &quot;description&quot;: &quot;查询技能剩余 PP&quot;,
+        &quot;parameters&quot;: {&quot;move_name&quot;: &quot;string&quot;},
+        &quot;returns&quot;: {&quot;current_pp&quot;: &quot;int&quot;, &quot;max_pp&quot;: &quot;int&quot;, &quot;is_low&quot;: &quot;bool&quot;},
+    },
+    &quot;get_status_info&quot;: {
+        &quot;description&quot;: &quot;查询当前状态效果的影响&quot;,
+        &quot;parameters&quot;: {&quot;status&quot;: &quot;string&quot;},
+        &quot;returns&quot;: {&quot;description&quot;: &quot;string&quot;, &quot;effects&quot;: &quot;list[string]&quot;},
+    },
+    &quot;check_speed_comparison&quot;: {
+        &quot;description&quot;: &quot;比较双方当前有效速度（考虑麻痹减速）&quot;,
+        &quot;parameters&quot;: {},
+        &quot;returns&quot;: {&quot;my_speed&quot;: &quot;int&quot;, &quot;opponent_speed&quot;: &quot;int&quot;, &quot;i_go_first&quot;: &quot;bool&quot;},
+    },
+}
+</code></pre>
+<br>
+<h3>Active Pokemon Agent 的典型 Tool Call 流程</h3>
+<br>
+<pre><code>
+Agent 收到 Trainer 指令: &quot;使用 Flamethrower 压制&quot;
+
+Step 1: tool_call → check_type_effectiveness(&quot;fire&quot;, [&quot;water&quot;])
+        返回: {multiplier: 0.5, effect_text: &quot;效果不好&quot;}
+        思考: &quot;火打水只有一半伤害...&quot;
+
+Step 2: tool_call → estimate_damage(&quot;喷射火焰&quot;, my_stats, opponent_stats, stab=true)
+        返回: {min: 38, max: 52, expected: 45.3}
+        思考: &quot;即使打满也就 52，不够杀&quot;
+
+Step 3: tool_call → check_speed_comparison()
+        返回: {my_speed: 100, opponent_speed: 78, i_go_first: true}
+        思考: &quot;我先手，有机会&quot;
+
+Step 4: tool_call → check_pp_remaining(&quot;喷射火焰&quot;)
+        返回: {current_pp: 12, max_pp: 15, is_low: false}
+        思考: &quot;PP 够用&quot;
+
+最终决策: 服从指令，选 Flamethrower
+</code></pre>
+<br>
+<h3>前端展示</h3>
+<br>
+<p>每个 tool call 在前端 Agent 面板中展示为一个可展开的卡片：</p>
+<br>
+<pre><code>
+┌─────────────────────────────────┐
+│ 🔧 check_type_effectiveness     │
+│ fire → water                    │
+│ 结果: 0.5x (效果不好)            │
+├─────────────────────────────────┤
+│ 💭 &quot;火打水只有一半伤害...&quot;        │
+└─────────────────────────────────┘
+  ↓ (0.3s stagger)
+┌─────────────────────────────────┐
+│ 🔧 estimate_damage              │
+│ Flamethrower: 38-52 dmg         │
+├─────────────────────────────────┤
+│ 💭 &quot;即使打满也不够杀&quot;            │
+└─────────────────────────────────┘
+</code></pre>
+<br>
+<h3>哪些 Agent 用哪些 Tool</h3>
+<br>
+<table>
+<tr><th>Agent</th><th>Tool Set</th><th>使用场景</th></tr>
+<tr><td>**Active Pokemon**</td><td>全部 5 个</td><td>选招前分步分析</td></tr>
+<tr><td>**Bench Pokemon**</td><td>check_type_effectiveness, check_speed_comparison</td><td>分析&quot;如果让我上会怎样&quot;</td></tr>
+<tr><td>**Trainer**</td><td>check_type_effectiveness, check_speed_comparison</td><td>制定策略时参考</td></tr>
+<tr><td>**Chat Agent**</td><td>无</td><td>垃圾话不需要 tool</td></tr>
+</table>
+<br>
+<h3>Tool 调用策略</h3>
+<br>
+<p>- Tool 调用是<strong>可选的</strong>——Agent 可以在 system prompt 中被指示&quot;先分析再决策&quot;或&quot;直接决策&quot;</p>
+<p>- Brave Charmander 的性格 modifier 是&quot;少用 tool，直接打&quot;——它的 system prompt 会指示跳过分析</p>
+<p>- Clever Bulbasaur 的性格 modifier 是&quot;先用 tool 分析再行动&quot;——它会用满 4 个 tool</p>
+<p>- 这本身就是一个可观察的性格差异化行为</p>
+<br>
+<p>---</p>
+<br>
+<h2> Self-Reflection — 回合后复盘</h2>
+<br>
+<p>每回合结算完成后，Active Pokemon Agent 和 Trainer Agent 对自己的决策进行简短复盘。复盘结果跨回合持久化，影响后续行为。</p>
+<br>
+<h3>复盘维度</h3>
+<br>
+<pre><code>
+Active Pokemon 复盘:
+  1. 选招是否合理？（实际伤害 vs 备选招的预期伤害）
+  2. 服从/抗命是否正确？（结果验证了选择吗？）
+  3. 对对手的判断是否准确？（预判的攻击招实际来了吗？）
+  4. 情绪状态是否影响了理性判断？
+
+Trainer 复盘:
+  1. 策略是否有效？（进攻/防守/消耗的选择对吗？）
+  2. 对玩家行为的预测是否准确？（Opponent Model 的预测 vs 实际）
+  3. Pokemon 的信任度应该调整吗？
+</code></pre>
+<br>
+<h3>复盘输出</h3>
+<br>
+<pre><code class="language-python">
+class ReflectionResult(BaseModel):
+    agent_id: str
+    turn: int
+    decision_was_correct: bool       # 事后评估
+    alternative_would_be_better: str | None  # &quot;选 Hydro Pump 期望伤害 72 &gt; 40&quot;
+    learned_insight: str             # &quot;低估了对手的攻击性&quot;
+    confidence_adjustment: float     # -0.1 ~ +0.1，对下回合决策置信度的影响
+</code></pre>
+<br>
+<h3>复盘影响</h3>
+<br>
+<pre><code>
+复盘 → 修改下回合行为参数:
+  &quot;我上次太保守了&quot; → risk_tolerance +0.1(临时)
+  &quot;抗命是对的&quot;     → obedience ×0.9 (临时，更容易再抗命)
+  &quot;Trainer 命令是对的&quot; → obedience ×1.1 (临时，更容易服从)
+  &quot;对手比预想的更激进&quot; → 更新 Opponent Model 的 aggression_estimate
+
+临时修正持续 2-3 回合后衰减，模拟&quot;短期记忆&quot;
+</code></pre>
+<br>
+<h3>前端展示</h3>
+<br>
+<p>复盘结果在回合结算后以简短的&quot;事后诸葛亮&quot;卡片展示：</p>
+<br>
+<pre><code>
+┌─────────────────────────────────┐
+│ 🤔 Gengar 复盘                  │
+│ &quot;选 Shadow Ball 打了 68。       │
+│  如果催眠成功然后换 Bulbasaur，  │
+│  可能更稳。但我不后悔。&quot;         │
+│ 信心: ████████░░ -0.1           │
+└─────────────────────────────────┘
+</code></pre>
+<br>
+<p>---</p>
+<br>
+<h2> Turn Flow (Expanded)</h2>
+<br>
+<p>每个回合的完整 Agent 编排流程：</p>
+<br>
+<pre><code>
+PHASE 1: Player selects move (manual, frontend)
+  │
+  ▼
+PHASE 2: Bench Agents observe &amp; form opinions
+  ├── Opponent Bench ×2: analyze battle → optional tool calls → team chat messages
+  └── Player Bench ×2: analyze battle → optional tool calls → team chat messages
+  (All 4 run in PARALLEL — no data dependencies)
+  │
+  ▼
+PHASE 3: Cross-team communication
+  ├── Opponent Active ↔ Player Bench: trash talk
+  └── Bench cross-talk: commentary exchange
+  (2-4 calls, runs after Phase 2 completes)
+  │
+  ▼
+PHASE 4: Trainer Agent strategizes
+  ├── Receives: battle state + bench opinions + opponent model + last reflection
+  └── Outputs: strategy + suggested move → sends to Active Pokemon
+  │
+  ▼
+PHASE 5: Active Pokemon Agent decides
+  ├── Receives: trainer command + team chat + fear state + obedience check
+  ├── Process:
+  │   ├── Optional: tool calling (type check → damage estimate → speed compare → PP check)
+  │   └── Evaluate command → apply personality filter → check fear override
+  └── Outputs: final move decision + emotional expression + tool call trace
+  │
+  ▼
+PHASE 6: Battle engine resolves
+  ├── Player move vs Agent move
+  ├── Damage calculation, status effects
+  └── Update all agent states (fear, battle lust, obedience history)
+  │
+  ▼
+PHASE 7: Self-Reflection
+  ├── Active Pokemon: evaluate own decision → learned insight → adjust parameters
+  └── Trainer: evaluate strategy accuracy → update opponent model → adjust trust
+  │
+  ▼
+PHASE 8: Results broadcast
+  ├── Turn result + reflection to all agents
+  ├── Agent reactions (brief, 1-line emotional responses)
+  └── Frontend updates: animations, HP bars, log, agent panels, tool call trace, reflection card
+</code></pre>
+<br>
+<p><strong>Latency strategy</strong>: Phase 2 bench calls run in parallel (fastest first). Phase 3 is optional and can be skipped under latency pressure. Phase 4 and 5 are sequential (data dependency). Target total: &lt; 5s per turn.</p>
+<br>
+<p>---</p>
+<br>
+<h2> Scope</h2>
+<br>
+<h3>In Scope (v2)</h3>
+<p>- Multi-agent architecture: 1 Trainer + 3 Pokemon per team (1 active + 2 bench)</p>
+<p>- 6 starter Pokemon with unique personalities, stats, move sets</p>
+<p>- 5 behavior systems: Obedience, Battle Lust, Fear, Social Dynamics, Opponent Model</p>
+<p>- <strong>Tool Calling</strong>: 5 tools for agent step-by-step battle reasoning</p>
+<p>- <strong>Self-Reflection</strong>: post-turn evaluation with cross-turn behavioral impact</p>
+<p>- Inter-agent communication: team chat, cross-team trash talk, bench commentary</p>
+<p>- Forced switching: Pokemon can retreat due to fear, bench Pokemon can demand to enter</p>
+<p>- &quot;Run away&quot; mechanic: extreme fear → Pokemon may flee battle (rare, personality-gated)</p>
+<p>- 1v1 turn-based PvE battle (player manual vs AI multi-agent system)</p>
+<p>- Standard battle mechanics: type chart, STAB, critical hits, accuracy, priority</p>
+<p>- 3 status effects: burn, paralysis, sleep</p>
+<p>- All agent thinking + tool calls + reflections fully visible in real-time</p>
+<p>- Pixel-art battle scene with move animations and particle effects</p>
+<p>- Post-battle summary with full agent interaction replay</p>
+<br>
+<h3>Out of Scope</h3>
+<p>- Items, weather, terrain, abilities</p>
+<p>- Stat stage modifiers</p>
+<p>- Multi-Pokemon simultaneous field</p>
+<p>- Nurturing system / bond evolution (Phase 2)</p>
+<p>- Story system / rival / gym (Phase 3)</p>
+<p>- Mobile responsive</p>
+<br>
+<p>---</p>
+<br>
+<h2> Design Decisions (Updated)</h2>
+<br>
+<table>
+<tr><th>Decision</th><th>Choice</th><th>Rationale</th></tr>
+<tr><td>Agent framework</td><td>CrewAI</td><td>Native Crew/Agent/Task/Process abstractions map directly to Trainer/Pokemon/Command/Team hierarchy</td></tr>
+<tr><td>Agent transparency</td><td>Every agent&#x27;s thoughts + tool calls + reflections visible in dedicated panels</td><td>Core demo value — watching 5+ agents interact, reason with tools, and self-reflect in real-time</td></tr>
+<tr><td>Obedience model</td><td>Custom middleware between CrewAI agents</td><td>CrewAI doesn&#x27;t natively model &quot;defiance&quot; — custom behavior layer needed</td></tr>
+<tr><td>Psychological state</td><td>In-memory state objects, updated per turn</td><td>Fear/BattleLust/Social are numerical simulations, not LLM-generated</td></tr>
+<tr><td>Tool Calling</td><td>5 deterministic Python functions exposed as Tools</td><td>Agent 分步推理的战斗计算不需要 LLM，但&quot;调用工具&quot;这个行为本身是 Agent 工程的核心 pattern</td></tr>
+<tr><td>Self-Reflection</td><td>Post-turn LLM evaluation, numerical parameter adjustment</td><td>展示 Agent 的&quot;学习能力&quot;——规则不能跨回合自适应，但复盘可以</td></tr>
+<tr><td>Bench agents</td><td>Full LLM agents with independent opinions + tools</td><td>Different from most demos — bench isn&#x27;t just data, it&#x27;s actors</td></tr>
+<tr><td>Cross-team chat</td><td>Separate LLM calls with dedicated chat prompts</td><td>Creates authentic &quot;sports drama&quot; dynamic</td></tr>
+<tr><td>LLM calls per turn</td><td>Up to 8 (6 agents + tool calls + 2 reflections), aggressive parallelization</td><td>Portfolio demo — latency tolerance is higher for showcase value</td></tr>
+<tr><td>Game renderer</td><td>Phaser.js (unchanged)</td><td>Battle scene remains a game, not a dashboard</td></tr>
+</table>
+<br>
+<p>---</p>
+<br>
+<h2> 6 Starter Pokemon (Updated with Full Parameters)</h2>
+<br>
+<table>
+<tr><th>#</th><th>Pokemon</th><th>Types</th><th>Personality</th><th>Aggression</th><th>Risk Tol.</th><th>Obedience</th><th>Fear Mult</th><th>Battle Lust Base</th><th>Playstyle</th></tr>
+<tr><td>1</td><td>Charmander</td><td>Fire</td><td>Brave</td><td>0.8</td><td>0.7</td><td>0.6</td><td>0.3</td><td>0.5</td><td>Defies to attack, low fear</td></tr>
+<tr><td>2</td><td>Squirtle</td><td>Water</td><td>Calm</td><td>0.4</td><td>0.3</td><td>1.2</td><td>0.5</td><td>0.3</td><td>Follows orders, measured fear</td></tr>
+<tr><td>3</td><td>Bulbasaur</td><td>Grass/Poison</td><td>Clever</td><td>0.5</td><td>0.5</td><td>1.0</td><td>0.6</td><td>0.3</td><td>Strategic defiance, calculated retreat</td></tr>
+<tr><td>4</td><td>Pikachu</td><td>Electric</td><td>Playful</td><td>0.7</td><td>0.8</td><td>0.8</td><td>0.7</td><td>0.6</td><td>Defies for fun, high battle lust</td></tr>
+<tr><td>5</td><td>Eevee</td><td>Normal</td><td>Timid</td><td>0.3</td><td>0.2</td><td>1.3</td><td>1.5</td><td>0.1</td><td>Highly obedient but easily terrified</td></tr>
+<tr><td>6</td><td>Gengar</td><td>Ghost/Poison</td><td>Mysterious</td><td>0.8</td><td>0.9</td><td>0.5</td><td>0.4</td><td>0.4</td><td>Unpredictable defiance, erratic fear</td></tr>
+</table>
+<br>
+<p>---</p>
+<br>
+<h2> Architecture</h2>
+<br>
+<h3>Backend (Python FastAPI + CrewAI, deployed on Railway)</h3>
+<br>
+<pre><code>
+backend/
+├── app/
+│   ├── main.py                     # FastAPI app with CORS + lifespan
+│   ├── api/
+│   │   ├── router.py               # Include all sub-routers
+│   │   ├── pokemon.py              # GET /api/pokemon, GET /api/pokemon/:id
+│   │   └── battles.py              # POST /api/battles, GET /api/battles/:id
+│   ├── ws/
+│   │   └── battle_ws.py            # WebSocket endpoint + turn state machine
+│   ├── engine/
+│   │   ├── battle.py               # Turn orchestration
+│   │   ├── damage.py               # Damage formula
+│   │   ├── type_chart.py           # 18-type effectiveness matrix
+│   │   └── effects.py              # Status effect resolution
+│   ├── agents/
+│   │   ├── crew_factory.py         # Builds CrewAI Crew (trainer + pokemon + bench)
+│   │   ├── trainer_agent.py        # Trainer Agent definition + strategy prompt
+│   │   ├── pokemon_agent.py        # Pokemon Agent definition + decision prompt
+│   │   ├── bench_agent.py          # Bench Agent definition + observation prompt
+│   │   ├── chat_agent.py           # Cross-team chat / trash talk prompts
+│   │   ├── tools/
+│   │   │   ├── registry.py         # Tool definitions + ToolRegistry
+│   │   │   ├── type_check.py       # check_type_effectiveness tool
+│   │   │   ├── damage_estimate.py  # estimate_damage tool
+│   │   │   ├── pp_check.py         # check_pp_remaining tool
+│   │   │   ├── status_info.py      # get_status_info tool
+│   │   │   └── speed_compare.py    # check_speed_comparison tool
+│   │   ├── harness/
+│   │   │   ├── pipeline.py         # Multi-agent turn pipeline (orchestrator)
+│   │   │   ├── behavior/
+│   │   │   │   ├── obedience.py    # Obedience calculation + defiance logic
+│   │   │   │   ├── battle_lust.py  # Battle lust accumulation + plea logic
+│   │   │   │   ├── fear.py         # Fear accumulation + retreat logic
+│   │   │   │   ├── social.py       # Relationship graph + bond effects
+│   │   │   │   └── opponent_model.py # Player behavior tracking + prediction
+│   │   │   ├── reflection.py       # Post-turn self-reflection + parameter adjustment
+│   │   │   └── hooks.py            # Pre/post hook registry
+│   │   └── prompts/
+│   │       ├── trainer.py          # Trainer system prompt templates
+│   │       ├── pokemon.py          # Pokemon decision prompt templates
+│   │       ├── bench.py            # Bench observation prompt templates
+│   │       └── chat.py             # Trash talk / team chat templates
+│   ├── models/
+│   │   ├── pokemon.py              # Pydantic: Stats, MoveDef, Personality
+│   │   ├── battle.py               # Pydantic: BattleState, BattlePokemon, TurnResult
+│   │   ├── agent.py                # Pydantic: AgentDecision, AgentState, ChatMessage
+│   │   └── team.py                 # Pydantic: Team, TeamState, SocialGraph
+│   └── data/
+│       ├── pokemon.json            # 6 Pokemon definitions
+│       ├── moves.json              # ~24 move definitions
+│       ├── personalities.json      # 6 personality presets (expanded)
+│       └── social_graph.json       # Initial relationship values
+├── requirements.txt
+└── Dockerfile
+</code></pre>
+<br>
+<h3>Frontend (Next.js 14 + Phaser.js, deployed on Vercel)</h3>
+<br>
+<pre><code>
+frontend/src/
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx                    # Team select screen (pick 3 Pokemon)
+│   └── battle/[id]/page.tsx        # Battle screen
+├── components/
+│   ├── select/
+│   │   ├── TeamBuilder.tsx         # Pick 3 Pokemon + assign active/bench
+│   │   ├── PokemonCard.tsx
+│   │   └── PokemonGrid.tsx
+│   └── battle/
+│       ├── BattleCanvas.tsx        # Phaser canvas mount point
+│       ├── TrainerMindPanel.tsx    # Trainer agent thinking (top-right)
+│       ├── ActivePokemonPanel.tsx  # Active Pokemon agent thinking + tool calls (right)
+│       ├── ToolCallCard.tsx        # Individual tool call expandable card
+│       ├── ReflectionCard.tsx      # Post-turn reflection card
+│       ├── BenchPanel.tsx          # Bench agents chat + battle lust meters
+│       ├── TeamChatPanel.tsx       # Team internal chat stream
+│       ├── CrossTalkPanel.tsx      # Cross-team trash talk stream
+│       ├── MoveSelector.tsx        # 4 move buttons
+│       ├── PlayerPokemonCard.tsx   # HP/stats display
+│       ├── OpponentPokemonCard.tsx # HP/stats display
+│       ├── BattleLog.tsx           # Turn event log
+│       ├── TurnBanner.tsx          # Turn indicator + phase
+│       └── BattleEndOverlay.tsx    # Winner/summary/replay
+├── game/
+│   ├── config.ts
+│   ├── scenes/BattleScene.ts
+│   ├── objects/
+│   │   ├── PokemonSprite.ts
+│   │   ├── HPBar.ts
+│   │   └── BattleBackground.ts
+│   └── effects/
+│       ├── FireEffect.ts ... (6 types)
+├── hooks/
+│   └── useBattleSocket.ts
+├── store/
+│   └── battleStore.ts              # Zustand store (expanded for multi-agent)
+├── lib/
+│   ├── api.ts
+│   └── types.ts
+└── public/sprites/
+</code></pre>
+<br>
+<p>---</p>
+<br>
+<h2> Data Models (Expanded)</h2>
+<br>
+<h3>Agent Psychological State</h3>
+<br>
+<pre><code class="language-python">
+class AgentInternalState(BaseModel):
+    &quot;&quot;&quot;Per-Pokemon psychological state, updated each turn.&quot;&quot;&quot;
+    pokemon_id: str
+    fear: float = 0.0                # 0.0–1.0
+    battle_lust: float = 0.0         # 0.0–1.0 (bench only)
+    obedience_last_turn: str | None  # &quot;obeyed&quot; | &quot;modified&quot; | &quot;defied&quot;
+    obedience_streak: int = 0        # consecutive defiances
+    last_emotion: str = &quot;neutral&quot;    # &quot;confident&quot;|&quot;nervous&quot;|&quot;angry&quot;|&quot;scared&quot;|&quot;excited&quot;|&quot;smug&quot;
+</code></pre>
+<br>
+<h3>Team &amp; Social Graph</h3>
+<br>
+<pre><code class="language-python">
+class SocialBond(BaseModel):
+    from_pokemon: str
+    to_pokemon: str
+    bond: float = 0.5                # 0.0–1.0
+    history: list[str]               # significant interaction events
+
+class TeamState(BaseModel):
+    team_id: str
+    trainer: TrainerPersonality
+    active_pokemon: BattlePokemon
+    bench: list[BattlePokemon]       # 2 bench Pokemon
+    social_graph: dict[str, dict[str, float]]
+    internal_states: dict[str, AgentInternalState]
+</code></pre>
+<br>
+<h3>Chat Messages</h3>
+<br>
+<pre><code class="language-python">
+class ChatMessage(BaseModel):
+    turn: int
+    from_agent: str                  # &quot;trainer&quot; | &quot;charmander&quot; | &quot;bench_bulbasaur&quot;
+    to_agent: str                    # &quot;team&quot; | &quot;charmander&quot; | &quot;opponent_active&quot;
+    channel: str                     # &quot;team_chat&quot; | &quot;cross_team&quot; | &quot;command&quot; | &quot;plea&quot;
+    content: str                     # message text in Chinese
+    emotion: str                     # emotional tone
+
+class ToolCall(BaseModel):
+    turn: int
+    agent_id: str
+    tool_name: str
+    input_params: dict
+    output_result: dict
+    agent_comment: str               # Agent&#x27;s 1-line reaction to the result
+
+class ReflectionResult(BaseModel):
+    agent_id: str
+    turn: int
+    decision_was_correct: bool
+    alternative_would_be_better: str | None
+    learned_insight: str
+    confidence_adjustment: float
+    narrative: str                   # 性格化的事后总结
+</code></pre>
+<br>
+<h3>Battle State (Updated)</h3>
+<br>
+<pre><code class="language-python">
+class BattleStateV2(BaseModel):
+    battle_id: str
+    player_team: TeamState            # Player&#x27;s team (1 active + 2 bench)
+    opponent_team: TeamState          # Opponent&#x27;s team (1 active + 2 bench)
+    current_turn: int
+    phase: str                        # &quot;player_select&quot; | &quot;bench_observe&quot; | &quot;cross_talk&quot;
+                                      # | &quot;trainer_strategy&quot; | &quot;pokemon_decide&quot; | &quot;resolving&quot;
+                                      # | &quot;reflection&quot; | &quot;finished&quot; | &quot;cancelled&quot;
+    winner: str | None
+    history: list[TurnResult]
+    chat_history: list[ChatMessage]
+    tool_call_history: list[ToolCall]
+    reflection_history: list[ReflectionResult]
+</code></pre>
+<br>
+<p>---</p>
+<br>
+<h2> API Design (Updated)</h2>
+<br>
+<h3>REST</h3>
+<pre><code>
+GET  /api/pokemon              → list[PokemonDef] (6 items)
+GET  /api/pokemon/:id          → PokemonDef (full, with move objects)
+POST /api/battles              → {battle_id, ws_url}
+     body: {
+         player_active_id: &quot;charmander&quot;,
+         player_bench_ids: [&quot;bulbasaur&quot;, &quot;squirtle&quot;],
+         opponent_team_ids: [&quot;pikachu&quot;, &quot;eevee&quot;, &quot;gengar&quot;]  # 1st = active
+     }
+</code></pre>
+<br>
+<h3>WebSocket (`ws://host/ws/battle/{battle_id}`)</h3>
+<br>
+<p><strong>Client → Server:</strong></p>
+<pre><code class="language-json">
+{&quot;type&quot;: &quot;start_battle&quot;}
+{&quot;type&quot;: &quot;player_move&quot;, &quot;move_index&quot;: 0}
+{&quot;type&quot;: &quot;player_switch&quot;, &quot;bench_index&quot;: 0}     // manual switch
+{&quot;type&quot;: &quot;encourage_pokemon&quot;}                    // reduce fear
+{&quot;type&quot;: &quot;rematch&quot;}
+{&quot;type&quot;: &quot;leave&quot;}
+</code></pre>
+<br>
+<p><strong>Server → Client (new/updated types):</strong></p>
+<pre><code class="language-json">
+// Phase progression
+{&quot;type&quot;: &quot;phase_change&quot;, &quot;data&quot;: {&quot;phase&quot;: &quot;bench_observe&quot;}}
+
+// Bench agent opinions (stream as they complete)
+{&quot;type&quot;: &quot;bench_opinion&quot;, &quot;data&quot;: {&quot;pokemon_id&quot;: &quot;bulbasaur&quot;, &quot;message&quot;: &quot;...&quot;, &quot;battle_lust&quot;: 0.65}}
+
+// Team chat message
+{&quot;type&quot;: &quot;team_chat&quot;, &quot;data&quot;: ChatMessage}
+
+// Cross-team trash talk
+{&quot;type&quot;: &quot;cross_talk&quot;, &quot;data&quot;: ChatMessage}
+
+// Trainer thinking (streaming)
+{&quot;type&quot;: &quot;trainer_thinking_start&quot;}
+{&quot;type&quot;: &quot;trainer_thinking_chunk&quot;, &quot;data&quot;: {&quot;text&quot;: &quot;...&quot;}}
+{&quot;type&quot;: &quot;trainer_command&quot;, &quot;data&quot;: TrainerDecision}
+
+// Pokemon decision with tool call trace
+{&quot;type&quot;: &quot;tool_call_start&quot;, &quot;data&quot;: {&quot;pokemon_id&quot;: &quot;gengar&quot;, &quot;tool_name&quot;: &quot;check_type_effectiveness&quot;}}
+{&quot;type&quot;: &quot;tool_call_result&quot;, &quot;data&quot;: {&quot;pokemon_id&quot;: &quot;gengar&quot;, &quot;tool_name&quot;: &quot;...&quot;, &quot;input&quot;: {...}, &quot;output&quot;: {...}}}
+{&quot;type&quot;: &quot;pokemon_thinking_start&quot;}
+{&quot;type&quot;: &quot;pokemon_thinking_chunk&quot;, &quot;data&quot;: {&quot;text&quot;: &quot;...&quot;}}
+{&quot;type&quot;: &quot;pokemon_decision&quot;, &quot;data&quot;: AgentDecision}
+
+// Self-reflection after turn resolves
+{&quot;type&quot;: &quot;reflection_start&quot;, &quot;data&quot;: {&quot;agent_id&quot;: &quot;gengar&quot;}}
+{&quot;type&quot;: &quot;reflection_result&quot;, &quot;data&quot;: ReflectionResult}
+
+// Psychological state update
+{&quot;type&quot;: &quot;agent_state_update&quot;, &quot;data&quot;: {&quot;pokemon_id&quot;: &quot;...&quot;, &quot;state&quot;: AgentInternalState}}
+
+// Retreat / forced switch
+{&quot;type&quot;: &quot;pokemon_retreat&quot;, &quot;data&quot;: {&quot;pokemon_id&quot;: &quot;...&quot;, &quot;reason&quot;: &quot;...&quot;, &quot;replacement_id&quot;: &quot;...&quot;}}
+
+// Battle events (unchanged)
+{&quot;type&quot;: &quot;turn_animation&quot;, &quot;data&quot;: {actions, timing}}
+{&quot;type&quot;: &quot;turn_resolved&quot;, &quot;data&quot;: TurnResult}
+{&quot;type&quot;: &quot;battle_ended&quot;, &quot;data&quot;: {winner, history, chat_history}}
+{&quot;type&quot;: &quot;error&quot;, &quot;data&quot;: {message, code}}
+</code></pre>
+<br>
+<p>---</p>
+<br>
+<h2> Battle Mechanics (Unchanged from v1)</h2>
+<br>
+<h3>Damage Formula</h3>
+<pre><code>
+Damage = floor(
+    ((2 * 50 / 5 + 2) * POWER * (ATK / DEF) / 50 + 2)
+    * STAB(1.5 if matching type)
+    * TypeEffectiveness(0/0.25/0.5/1/2/4)
+    * Critical(1.5 if crit)
+    * Random(0.85~1.0)
+)
+</code></pre>
+<br>
+<h3>Turn Resolution Order</h3>
+<p>1. Player selects move (manual)</p>
+<p>2. Bench agents observe, form opinions, accumulate battle lust</p>
+<p>3. Cross-team chat exchanges</p>
+<p>4. Trainer agent strategizes, issues command</p>
+<p>5. Active Pokemon agent evaluates command, applies personality, decides</p>
+<p>6. Engine resolves: speed → accuracy → crit → damage → status → burn tick → faint check</p>
+<p>7. Results broadcast, psychological states updated</p>
+<br>
+<h3>Type Effectiveness</h3>
+<p>Standard 18-type chart. Dual-type multipliers are multiplicative.</p>
+<br>
+<p>---</p>
+<br>
+<h2> Frontend Layout (Expanded)</h2>
+<br>
+<pre><code>
+┌──────────────────────────────────────────────────────────────────────┐
+│  Turn 5                                          [TRAINER THINKING]  │
+├────────────────────────────┬──────────────────┬──────────────────────┤
+│                            │                  │ TRAINER              │
+│    [BATTLE CANVAS]         │  OPPONENT TEAM   │ &quot;局势劣，让            │
+│                            │  ┌────────────┐  │  Bulbasaur准备...&quot;   │
+│   🦎          👻           │  │ Active:    │  │                      │
+│  Charmander  Gengar        │  │ Gengar     │  ├──────────────────────┤
+│  ████░░ 72   ██████ 105    │  │ HP:105/105 │  │ ACTIVE POKEMON       │
+│                            │  │ 😈 Smug    │  │ GENGAR THINKING      │
+│                            │  └────────────┘  │ &quot;嘻嘻...对面小火龙     │
+│                            │  ┌────────────┐  │  以为能打到我？让      │
+│                            │  │ Bench:     │  │  我催眠他再换            │
+│                            │  │ ⭐ Pikachu  │  │  上...&quot;             │
+│  [particles &amp; animations]  │  │ 🍃Bulbasaur│  ├──────────────────────┤
+│                            │  └────────────┘  │ BENCH CHAT           │
+│                            │                  │ Pikachu: &quot;我想上！&quot;   │
+│                            │  [BENCH PANEL]   │ Bulbasaur: &quot;等等，    │
+│                            │  Battle Lust:    │  对面鬼系打不了我&quot;      │
+│                            │  Pikachu  ████░░ │                      │
+│                            │  Bulbasaur ██░░░░ │                      │
+├────────────────────────────┴──────────────────┼──────────────────────┤
+│ YOUR POKEMON                                   │ CROSS-TALK           │
+│ Charmander HP:72/120 🔥BURN                     │ Gengar→&quot;You sure   │
+│                                                │  you wanna do that?&quot;│
+│ [🔥Ember] [🔥Flamethrower] [✂Scratch] [😱Growl]│ Charmander→&quot;Shut   │
+│                                                │  up ghost!&quot;         │
+├────────────────────────────────────────────────┴──────────────────────┤
+│ ⚔ Charmander used Ember! 42 damage!                                 │
+│ ⚔ Gengar used Shadow Ball! 68 damage! Critical hit!                 │
+│ ⚔ Charmander is hurt by its burn! -15 HP                           │
+└──────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<br>
+<p>---</p>
+<br>
+<h2> Deployment (Unchanged)</h2>
+<br>
+<p>- Frontend: Vercel (Next.js)</p>
+<p>- Backend: Railway (Docker, FastAPI + uvicorn)</p>
+<p>- LLM: 百炼 DeepSeek v4 pro</p>
+<p>- Local dev: Docker Compose</p>
+<br>
+<h2> Constraints</h2>
+<br>
+<p>- Desktop only (1920×1080+)</p>
+<p>- Requires active 百炼 API key</p>
+<p>- <strong>Up to 8 LLM calls per turn</strong> (4 bench + 1 trainer + 1 active + 2 reflection). Bench agents run in parallel.</p>
+<p>- Tool calls are deterministic Python functions, no LLM cost</p>
+<p>- API cost per battle: ~¥1.00–3.00 (depending on turn count)</p>
+<p>- Target turn latency: &lt; 5s (tool calls are instant; parallel bench agents reduce wall-clock time)</p>
+<p>- No persistence (ephemeral battles)</p>
+<br>
+<h2> Verification</h2>
+<br>
+<p>1. <strong>Engine unit tests</strong>: damage, type chart, status effects</p>
+<p>2. <strong>Behavior unit tests</strong>: obedience, fear/battle_lust accumulation, social bond effects, opponent model prediction accuracy</p>
+<p>3. <strong>Tool unit tests</strong>: each tool returns correct values for known inputs</p>
+<p>4. <strong>Reflection unit tests</strong>: parameter adjustments stay within valid ranges</p>
+<p>5. <strong>Agent integration tests</strong>: mock LLM responses, verify correct agent communication flow + tool call sequences + reflection execution</p>
+<p>6. <strong>Multi-agent quality</strong>: 10 simulated battles, verify:</p>
+<p>   - Agent wins &gt; 60%</p>
+<p>   - Tool calls per turn: Brave Pokemon &lt; 1, Clever Pokemon &gt; 3 (性格驱动的差异化)</p>
+<p>   - Defiance events in &gt; 50% of battles</p>
+<p>   - At least 1 retreat/forced-switch event per 3 battles</p>
+<p>   - Cross-team trash talk &gt; 5 messages per battle</p>
+<p>   - Reflection generates actionable insights (not just &quot;good job&quot;)</p>
+<p>7. <strong>Manual E2E</strong>: full battle with real LLM, verify all panels update, tool calls + reflections visible</p>
+<p>8. <strong>Demo video</strong>: record complete multi-agent battle with tool calls and reflection</p>
+<br>
+</body>
+</html>

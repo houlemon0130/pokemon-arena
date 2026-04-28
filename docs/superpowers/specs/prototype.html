@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, initial-scale=1.0">
+<title>宝可梦竞技场 — 对战原型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #0a0a0f;
+    color: #ccc;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+  }
+
+  /* Top Bar */
+  .topbar {
+    height: 36px; background: #0d0d1a; border-bottom: 1px solid #1a1a3a;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+    font-size: 12px;
+  }
+  .topbar .turn { color: #888; }
+  .topbar .status { color: #eab308; }
+
+  /* Main Layout */
+  .main { display: flex; height: calc(100vh - 36px - 120px - 120px); }
+
+  /* Left: Your Team */
+  .your-team {
+    width: 240px; border-right: 1px solid #1a1a3a; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  /* Center: Battle Canvas */
+  .canvas-area {
+    flex: 1; position: relative;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 60%, #1a3a1a 60%, #2d5a27 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .battle-scene {
+    width: 100%; height: 100%; position: relative;
+  }
+  .pokemon-sprite {
+    position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .pokemon-sprite .icon {
+    width: 96px; height: 96px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    image-rendering: pixelated;
+  }
+  .pokemon-sprite .icon img { width: 96px; height: 96px; image-rendering: pixelated; }
+  .pokemon-sprite .icon.back img { transform: scaleX(-1); }
+  .player-sprite { bottom: 50px; left: 200px; }
+  .opponent-sprite { top: 50px; right: 200px; }
+  .sprite-name { font-size: 11px; color: #fff; }
+  .hp-bar-mini { width: 120px; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+  .hp-bar-mini .fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+  .hp-text { font-size: 10px; color: #888; }
+
+  .poke-icon-sm { width: 36px; height: 36px; image-rendering: pixelated; }
+  .poke-icon-xs { width: 30px; height: 30px; image-rendering: pixelated; }
+
+  /* Right: Opponent Team + Agent Panels */
+  .right-panels {
+    width: 520px; border-left: 1px solid #1a1a3a;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+
+  .panel {
+    border-bottom: 1px solid #1a1a3a; padding: 10px 12px;
+  }
+  .panel-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+    color: #666; margin-bottom: 8px;
+  }
+
+  /* Trainer Panel */
+  .trainer-think { font-size: 12px; color: #aaa; line-height: 1.5; }
+  .trainer-command {
+    margin-top: 6px; padding: 6px 10px; background: #f39c1210;
+    border-left: 2px solid #f39c12; border-radius: 0 4px 4px 0; font-size: 11px;
+  }
+
+  /* Tool Call Card */
+  .tool-call {
+    background: #0d0d1a; border-radius: 6px; padding: 8px 10px; margin: 4px 0;
+    border: 1px solid #1a1a3a; font-size: 11px;
+  }
+  .tool-call .tool-name { color: #3498db; }
+  .tool-call .tool-result { color: #888; margin-top: 2px; }
+  .tool-call .tool-thought { color: #aaa; font-style: italic; margin-top: 4px; }
+
+  /* Bench Panel */
+  .bench-list { display: flex; flex-direction: column; gap: 6px; }
+  .bench-item { display: flex; align-items: center; gap: 8px; }
+  .bench-icon {
+    width: 36px; height: 36px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+  }
+  .bench-info { flex: 1; font-size: 11px; }
+  .bench-name { color: #fff; }
+  .bench-chat { color: #aaa; font-size: 10px; margin-top: 2px; }
+  .lust-bar { width: 60px; height: 4px; background: #333; border-radius: 2px; overflow: hidden; }
+  .lust-bar .fill { height: 100%; border-radius: 2px; }
+
+  /* Team Chat */
+  .chat-msg { font-size: 11px; padding: 3px 0; border-bottom: 1px solid #0f0f1f; }
+  .chat-msg .who { color: #666; }
+
+  /* Cross Talk */
+  .trashtalk { font-size: 11px; padding: 4px 8px; margin: 2px 0; border-radius: 4px; }
+  .trashtalk.to-us { background: #ef444410; border-left: 2px solid #ef4444; }
+  .trashtalk.to-them { background: #22c55e10; border-left: 2px solid #22c55e; text-align: right; }
+
+  /* Reflection Card */
+  .reflection {
+    background: #1a1a2e; border-radius: 6px; padding: 8px 10px; margin: 4px 0;
+    border: 1px solid #2a2a4e; font-size: 11px;
+  }
+  .reflection .who { color: #a855f7; }
+
+  /* Bottom: Your Active Pokemon + Moves */
+  .bottom-area {
+    height: 120px; border-top: 1px solid #1a1a3a;
+    display: flex; align-items: center; gap: 20px; padding: 12px 20px;
+    background: #0d0d1a;
+  }
+  .your-card {
+    background: #ffffff05; border-radius: 10px; padding: 12px 16px; min-width: 200px;
+  }
+  .your-card .name { color: #fff; font-weight: bold; font-size: 13px; }
+  .your-card .level { color: #666; font-size: 11px; }
+  .your-hp-bar { width: 160px; height: 10px; background: #333; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+  .your-hp-bar .fill { height: 100%; border-radius: 5px; }
+  .your-hp-text { font-size: 11px; color: #888; }
+  .your-status { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #eab30820; color: #eab308; margin-left: 6px; }
+
+  .move-buttons { display: flex; gap: 10px; flex: 1; justify-content: center; }
+  .move-btn {
+    padding: 12px 16px; border-radius: 10px; border: 1px solid #ffffff15;
+    background: #ffffff05; color: #ccc; font-family: monospace; font-size: 11px;
+    cursor: pointer; text-align: center; min-width: 100px; transition: all 0.15s;
+  }
+  .move-btn:hover { background: #ffffff10; border-color: #ffffff30; transform: translateY(-1px); }
+  .move-btn .move-type { font-size: 9px; padding: 2px 6px; border-radius: 3px; margin-bottom: 4px; display: inline-block; }
+  .move-btn .move-name { color: #fff; font-weight: bold; }
+  .move-btn .move-info { font-size: 9px; color: #888; margin-top: 2px; }
+
+  /* Battle Log */
+  .log-area {
+    height: 120px; border-top: 1px solid #1a1a3a;
+    background: #080810; padding: 8px 16px; overflow-y: auto; font-size: 11px;
+  }
+  .log-msg { color: #666; padding: 1px 0; }
+  .log-msg.important { color: #aaa; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1a1a3a; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <span class="turn">第 5 回合</span>
+  <span class="status">⬤ 对手训练师正在制定策略...</span>
+  <span style="color:#444">⏱ 2.3s</span>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+  <!-- Left: Your Team -->
+  <div class="your-team">
+    <div class="panel-title">你的队伍</div>
+
+    <div style="font-size:10px; color:#888; margin-bottom:4px;">上场</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <img class="poke-icon-sm" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/4.gif" alt="小火龙">
+      <div>
+        <div style="color:#fff;font-size:11px;">小火龙</div>
+        <div style="width:80px;height:4px;background:#333;border-radius:2px;overflow:hidden;margin-top:2px;">
+          <div style="width:60%;height:100%;background:#eab308;"></div>
+        </div>
+        <div style="font-size:9px;color:#888;">72/120 烧伤</div>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:#888;margin-bottom:4px;">板凳</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <img class="poke-icon-xs" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/1.gif" alt="妙蛙种子">
+      <div>
+        <div style="color:#aaa;font-size:10px;">妙蛙种子</div>
+        <div style="font-size:9px;color:#22c55e;">"要不要换我上？"</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <img class="poke-icon-xs" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/7.gif" alt="杰尼龟">
+      <div>
+        <div style="color:#aaa;font-size:10px;">杰尼龟</div>
+        <div style="font-size:9px;color:#3b82f6;">"冷静，别急"</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <div class="panel-title" style="margin-bottom:4px;">跨队对话</div>
+      <div class="trashtalk to-them">"闭嘴吧耿鬼！"</div>
+      <div class="trashtalk to-us">"你确定要这么做？"</div>
+    </div>
+  </div>
+
+  <!-- Center: Battle Canvas -->
+  <div class="canvas-area">
+    <div class="battle-scene">
+      <!-- Decorative ground line -->
+      <div style="position:absolute;top:55%;left:0;right:0;height:2px;background:#ffffff08;"></div>
+      <!-- Center circle -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:120px;height:120px;border:1px solid #ffffff06;border-radius:50%;"></div>
+
+      <!-- Player Pokemon (Charmander, back sprite) -->
+      <div class="pokemon-sprite player-sprite">
+        <div class="icon back"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/back/4.gif" alt="小火龙"></div>
+        <div class="sprite-name">小火龙</div>
+        <div class="hp-bar-mini"><div class="fill" style="width:60%;background:#eab308;"></div></div>
+        <div class="hp-text">72/120</div>
+      </div>
+
+      <!-- Opponent Pokemon (Gengar, front sprite) -->
+      <div class="pokemon-sprite opponent-sprite">
+        <div class="icon"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/94.gif" alt="耿鬼"></div>
+        <div class="sprite-name">耿鬼</div>
+        <div class="hp-bar-mini"><div class="fill" style="width:90%;background:#22c55e;"></div></div>
+        <div class="hp-text">95/105</div>
+      </div>
+
+      <!-- Attack animation placeholder -->
+      <div style="position:absolute;top:30%;left:55%;color:#7c3aed;font-size:14px;opacity:0.6;">
+        暗影球 --->
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: AI Agent Panels -->
+  <div class="right-panels">
+
+    <!-- Trainer Panel -->
+    <div class="panel">
+      <div class="panel-title">对手训练师</div>
+      <div class="trainer-think">
+        "局势焦灼。Gengar HP 还健康，但对面 Charmander 虽然烧伤还在硬撑。<br>
+        对手模型预测：火系玩家血量低时会冒险用 喷射火焰。<br>
+        策略：让 Gengar 催眠对方，然后换 Bulbasaur 上场收残。"
+      </div>
+      <div class="trainer-command">
+        → 向 耿鬼 下令：使用催眠术，然后换 妙蛙种子 上场
+      </div>
+    </div>
+
+    <!-- Active Pokemon Panel -->
+    <div class="panel">
+      <div class="panel-title">
+        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/94.gif" width="24" height="24" style="image-rendering:pixelated;vertical-align:middle;">
+        耿鬼（上场）— 思考中
+      </div>
+
+      <!-- Tool Calls -->
+      <div class="tool-call">
+        <span class="tool-name">🔧 属性克制查询</span><br>
+        <span class="tool-result">幽灵 → 火 = 1.0x（普通）</span>
+        <div class="tool-thought">"影子球伤害正常，不差"</div>
+      </div>
+      <div class="tool-call">
+        <span class="tool-name">🔧 伤害估算</span><br>
+        <span class="tool-result">暗影球：62-78 伤害（期望 70）</span>
+        <div class="tool-thought">"对面只有72血，大概率能秒"</div>
+      </div>
+      <div class="tool-call">
+        <span class="tool-name">🔧 速度比较</span><br>
+        <span class="tool-result">耿鬼 115 &gt; 小火龙 100 → 我先手</span>
+        <div class="tool-thought">"我先手，不用怕"</div>
+      </div>
+
+      <div style="font-size:12px;color:#ccc;margin-top:8px;line-height:1.5;">
+        "训练师让我催眠然后换人？太麻烦了。<br>
+        对面火系就 72 血，我一个 暗影球 直接带走。<br>
+        <span style="color:#7c3aed;">这次不听他的。</span>"
+      </div>
+      <div style="margin-top:4px;font-size:10px;color:#7c3aed;">
+        ⚠ 违抗训练师指令 → 改为使用暗影球
+      </div>
+    </div>
+
+    <!-- Bench Panel -->
+    <div class="panel">
+      <div class="panel-title">对手板凳</div>
+      <div class="bench-list">
+        <div class="bench-item">
+          <img class="poke-icon-sm" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/25.gif" alt="皮卡丘">
+          <div class="bench-info">
+            <div class="bench-name">皮卡丘</div>
+            <div class="bench-chat">"让我上让我上！小火龙看起来好欺负！"</div>
+          </div>
+          <div class="lust-bar"><div class="fill" style="width:75%;background:#eab308;"></div></div>
+        </div>
+        <div class="bench-item">
+          <img class="poke-icon-sm" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/1.gif" alt="妙蛙种子">
+          <div class="bench-info">
+            <div class="bench-name">妙蛙种子</div>
+            <div class="bench-chat">"皮卡丘 别闹，电打火没优势。等机会。"</div>
+          </div>
+          <div class="lust-bar"><div class="fill" style="width:35%;background:#22c55e;"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Team Chat -->
+    <div class="panel">
+      <div class="panel-title">队内聊天</div>
+      <div class="chat-msg"><span class="who">[皮卡丘]</span> "耿鬼 你行不行啊，不行让我来！"</div>
+      <div class="chat-msg"><span class="who">[妙蛙种子]</span> "皮卡丘 冷静，电系打火系没有优势"</div>
+      <div class="chat-msg"><span class="who">[耿鬼]</span> "别吵，看我一发送走他"</div>
+      <div class="chat-msg"><span class="who">[训练师]</span> "耿鬼，我让你用催眠。你在干什么？"</div>
+    </div>
+
+    <!-- Reflection -->
+    <div class="panel">
+      <div class="panel-title">上回合复盘</div>
+      <div class="reflection">
+        <span class="who">耿鬼</span> — 第4回合复盘<br>
+        "选了 暗影球 打了 55，如果选 催眠术 可能更稳。<br>
+        但我不后悔。攻击就是最好的防御。<br>
+        下回合继续暗影球。"
+        <div style="margin-top:2px;font-size:10px;color:#888;">信心: -0.05 | 服从度 临时 ×0.9</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Bottom: Your Pokemon + Moves -->
+<div class="bottom-area">
+  <div class="your-card">
+    <div>
+      <span class="name">小火龙</span>
+      <span class="level">Lv.50</span>
+      <span class="your-status">烧伤</span>
+    </div>
+    <div class="your-hp-bar">
+      <div class="fill" style="width:60%;background:#eab308;"></div>
+    </div>
+    <div class="your-hp-text">72 / 120 HP</div>
+    <div style="font-size:9px;color:#ef4444;margin-top:2px;">恐惧: ██░░░░░░░░ 0.18 (勇敢 ×0.3)</div>
+  </div>
+
+  <div class="move-buttons">
+    <div class="move-btn" style="border-color:#eab30840;">
+      <div class="move-type" style="background:#f59e0b;color:#000;">火</div>
+      <div class="move-name">火花</div>
+      <div class="move-info">威力:40 命中:100</div>
+    </div>
+    <div class="move-btn">
+      <div class="move-type" style="background:#f59e0b;color:#000;">火</div>
+      <div class="move-name">喷射火焰</div>
+      <div class="move-info">威力:90 命中:100</div>
+    </div>
+    <div class="move-btn">
+      <div class="move-type" style="background:#a8a29e;color:#000;">一般</div>
+      <div class="move-name">抓</div>
+      <div class="move-info">威力:40 命中:100</div>
+    </div>
+    <div class="move-btn">
+      <div class="move-type" style="background:#a8a29e;color:#000;">一般</div>
+      <div class="move-name">叫声</div>
+      <div class="move-info">状态 命中:100</div>
+    </div>
+  </div>
+
+  <button style="padding:10px 20px;background:#22c55e20;border:1px solid #22c55e40;border-radius:8px;color:#22c55e;font-family:monospace;font-size:11px;cursor:pointer;">
+    ↩ 换上妙蛙种子
+  </button>
+</div>
+
+<!-- Battle Log -->
+<div class="log-area">
+  <div class="log-msg">—— 第 5 回合 ——</div>
+  <div class="log-msg important">耿鬼 使用 暗影球！68 伤害！会心一击！</div>
+  <div class="log-msg important">小火龙 使用 火花！42 伤害！</div>
+  <div class="log-msg">小火龙被烧伤了！-15 HP</div>
+  <div class="log-msg" style="color:#7c3aed;">耿鬼："嘻嘻，就说了一发送走"</div>
+  <div class="log-msg" style="color:#f39c12;">训练师 对 耿鬼 的信任度: -0.15（连续抗命）</div>
+</div>
+
+</body>
+</html>
