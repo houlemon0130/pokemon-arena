@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef } from "react";
 
 import type {
   AgentDecision,
+  BattlePokemon,
   BattleStateV2,
+  BattleTeam,
   BattleSocketMessage,
   ChatMessage,
   ReflectionResult,
@@ -14,6 +16,41 @@ import type {
 import { useBattleStore } from "@/store/battleStore";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+
+function applyHpToPokemon(pokemon: BattlePokemon, hpAfter: Record<string, number>) {
+  const currentHp = hpAfter[pokemon.def_id];
+  if (currentHp === undefined) {
+    return pokemon;
+  }
+  return { ...pokemon, current_hp: currentHp };
+}
+
+function applyHpToTeam(team: BattleTeam | undefined, hpAfter: Record<string, number>) {
+  if (!team) {
+    return team;
+  }
+  return {
+    ...team,
+    active: applyHpToPokemon(team.active, hpAfter),
+    bench: team.bench.map((pokemon) => applyHpToPokemon(pokemon, hpAfter)),
+  };
+}
+
+export function applyTurnResultToBattleState(
+  battleState: BattleStateV2 | null,
+  result: TurnResult,
+): BattleStateV2 | null {
+  if (!battleState) {
+    return battleState;
+  }
+  return {
+    ...battleState,
+    current_turn: result.turn,
+    history: [...(battleState.history ?? []), result],
+    player_team: applyHpToTeam(battleState.player_team, result.hp_after),
+    opponent_team: applyHpToTeam(battleState.opponent_team, result.hp_after),
+  };
+}
 
 export function useBattleSocket(battleId: string | null | undefined) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,7 +107,23 @@ export function useBattleSocket(battleId: string | null | undefined) {
             break;
           case "turn_result":
             setAgentThinking(false);
-            ((message.data as TurnResult | undefined)?.events ?? []).forEach((event) => addBattleLog(event));
+            {
+              const result = message.data as TurnResult | undefined;
+              if (result) {
+                const currentState = useBattleStore.getState().battleState;
+                setBattleState(applyTurnResultToBattleState(currentState, result));
+                result.events.forEach((event) => addBattleLog(event));
+              }
+            }
+            break;
+          case "battle_ended":
+            {
+              const endedState = message.data as BattleStateV2 | undefined;
+              if (endedState) {
+                setBattleState(endedState);
+              }
+              addBattleLog(`Winner: ${endedState?.winner ?? "unknown"}`);
+            }
             break;
           case "error":
             addBattleLog(message.message ?? "WebSocket error");

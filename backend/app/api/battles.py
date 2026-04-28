@@ -22,6 +22,9 @@ async def create_battle(request: CreateBattleRequest):
         "player_active_id": request.player_active_id,
         "player_bench_ids": request.player_bench_ids,
         "opponent_team_ids": request.opponent_team_ids,
+        "current_turn": 0,
         "phase": "created",
+        "winner": None,
+        "history": [],
     }
     return {"battle_id": battle_id, "ws_url": f"/ws/battles/{battle_id}"}
