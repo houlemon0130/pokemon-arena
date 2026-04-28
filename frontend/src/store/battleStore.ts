@@ -6,10 +6,12 @@ import type {
   ChatMessage,
   ReflectionResult,
   ToolCall,
+  TurnAnimation,
 } from "@/lib/types";
 
 type BattleStore = {
   battleState: BattleStateV2 | null;
+  turnAnimation: TurnAnimation | null;
   agentDecisions: AgentDecision[];
   toolCalls: ToolCall[];
   reflections: ReflectionResult[];
@@ -18,6 +20,7 @@ type BattleStore = {
   isAgentThinking: boolean;
   selectedMove: number | null;
   setBattleState: (battleState: BattleStateV2 | null) => void;
+  setTurnAnimation: (turnAnimation: TurnAnimation | null) => void;
   addAgentDecision: (decision: AgentDecision) => void;
   addToolCall: (toolCall: ToolCall) => void;
   addReflection: (reflection: ReflectionResult) => void;
@@ -30,6 +33,7 @@ type BattleStore = {
 
 export const useBattleStore = create<BattleStore>((set) => ({
   battleState: null,
+  turnAnimation: null,
   agentDecisions: [],
   toolCalls: [],
   reflections: [],
@@ -38,6 +42,7 @@ export const useBattleStore = create<BattleStore>((set) => ({
   isAgentThinking: false,
   selectedMove: null,
   setBattleState: (battleState) => set({ battleState }),
+  setTurnAnimation: (turnAnimation) => set({ turnAnimation }),
   addAgentDecision: (decision) =>
     set((state) => ({ agentDecisions: [...state.agentDecisions, decision] })),
   addToolCall: (toolCall) => set((state) => ({ toolCalls: [...state.toolCalls, toolCall] })),
@@ -51,6 +56,7 @@ export const useBattleStore = create<BattleStore>((set) => ({
   resetBattle: () =>
     set({
       battleState: null,
+      turnAnimation: null,
       agentDecisions: [],
       toolCalls: [],
       reflections: [],

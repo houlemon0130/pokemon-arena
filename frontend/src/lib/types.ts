@@ -68,6 +68,23 @@ export type TurnResult = {
   hp_after: Record<string, number>;
 };
 
+export type BattleAnimationActor = "player" | "opponent";
+
+export type BattleAnimationAction = {
+  actor: BattleAnimationActor;
+  target?: BattleAnimationActor;
+  move_name?: string;
+  move_type?: string;
+};
+
+export type TurnAnimation = {
+  id: string;
+  actions: BattleAnimationAction[];
+  timing?: {
+    delay_ms?: number;
+  };
+};
+
 export type BattleStateV2 = {
   battle_id: string;
   player_active_id?: string;
