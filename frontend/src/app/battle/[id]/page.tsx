@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { BattleEndOverlay } from "@/components/battle/BattleEndOverlay";
 import { BattleCanvas } from "@/components/battle/BattleCanvas";
 import { BattleLog } from "@/components/battle/BattleLog";
+import { BenchPanel } from "@/components/battle/BenchPanel";
 import { MoveSelector } from "@/components/battle/MoveSelector";
 import { OpponentPokemonCard } from "@/components/battle/OpponentPokemonCard";
 import { PlayerPokemonCard } from "@/components/battle/PlayerPokemonCard";
@@ -57,6 +58,7 @@ export default function BattlePage() {
           <BattleCanvas />
         </section>
         <aside className="space-y-4">
+          <BenchPanel />
           <BattleLog events={battleLog} />
         </aside>
       </div>
