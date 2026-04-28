@@ -17,15 +17,7 @@ import { TeamChatPanel } from "@/components/battle/TeamChatPanel";
 import { TrainerMindPanel } from "@/components/battle/TrainerMindPanel";
 import { TurnBanner } from "@/components/battle/TurnBanner";
 import { useBattleSocket } from "@/hooks/useBattleSocket";
-import type { MoveDef } from "@/lib/types";
 import { useBattleStore } from "@/store/battleStore";
-
-const DEFAULT_MOVES: MoveDef[] = [
-  { id: "ember", name: "Ember", type: "fire", category: "special", power: 40, accuracy: 100, pp: 25 },
-  { id: "flamethrower", name: "Flamethrower", type: "fire", category: "special", power: 90, accuracy: 100, pp: 15 },
-  { id: "scratch", name: "Scratch", type: "normal", category: "physical", power: 40, accuracy: 100, pp: 35 },
-  { id: "growl", name: "Growl", type: "normal", category: "status", accuracy: 100, pp: 40 },
-];
 
 export default function BattlePage() {
   const params = useParams<{ id: string }>();
@@ -34,13 +26,19 @@ export default function BattlePage() {
   const setSelectedMove = useBattleStore((state) => state.setSelectedMove);
   const battleLog = useBattleStore((state) => state.battleLog);
   const { sendMessage } = useBattleSocket(params.id);
+  const playerPokemon = battleState?.player_team?.active;
+  const opponentPokemon = battleState?.opponent_team?.active;
+  const moves = playerPokemon?.moves ?? [];
 
   const handleSelectMove = useCallback(
     (index: number) => {
+      if (!moves[index]) {
+        return;
+      }
       setSelectedMove(index);
       sendMessage({ type: "player_move", move_index: index });
     },
-    [sendMessage, setSelectedMove],
+    [moves, sendMessage, setSelectedMove],
   );
 
   return (
@@ -48,9 +46,20 @@ export default function BattlePage() {
       <TurnBanner turn={battleState?.current_turn ?? 1} phase={battleState?.phase ?? "connecting"} />
       <div className="grid gap-4 p-4 lg:grid-cols-[320px_1fr_360px]">
         <aside className="space-y-4">
-          <OpponentPokemonCard name="Gengar" hp={115} maxHp={115} status={null} />
-          <PlayerPokemonCard name="Charmander" hp={120} maxHp={120} status={null} fear={0} />
-          <MoveSelector moves={DEFAULT_MOVES} selectedMove={selectedMove} onSelect={handleSelectMove} />
+          <OpponentPokemonCard
+            name={opponentPokemon?.name ?? "Opponent"}
+            hp={opponentPokemon?.current_hp ?? 0}
+            maxHp={opponentPokemon?.max_hp ?? 1}
+            status={opponentPokemon?.status ?? null}
+          />
+          <PlayerPokemonCard
+            name={playerPokemon?.name ?? "Player"}
+            hp={playerPokemon?.current_hp ?? 0}
+            maxHp={playerPokemon?.max_hp ?? 1}
+            status={playerPokemon?.status ?? null}
+            fear={0}
+          />
+          <MoveSelector moves={moves} selectedMove={selectedMove} onSelect={handleSelectMove} />
         </aside>
         <section className="min-h-[520px] rounded-lg border border-zinc-800 bg-black">
           <BattleCanvas />

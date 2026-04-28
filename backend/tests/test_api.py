@@ -61,6 +61,50 @@ def test_battle_websocket_connects():
     assert message["type"] == "battle_started"
 
 
+def test_battle_started_includes_runtime_player_moves():
+    battle = client.post(
+        "/api/battles",
+        json={
+            "player_active_id": "squirtle",
+            "player_bench_ids": ["charmander", "bulbasaur"],
+            "opponent_team_ids": ["gengar", "pikachu", "eevee"],
+        },
+    ).json()
+
+    with client.websocket_connect(battle["ws_url"]) as websocket:
+        websocket.send_json({"type": "start_battle"})
+        message = websocket.receive_json()
+
+    assert message["type"] == "battle_started"
+    assert message["data"]["player_team"]["active"]["def_id"] == "squirtle"
+    assert [move["id"] for move in message["data"]["player_team"]["active"]["moves"]] == [
+        "water_gun",
+        "hydro_pump",
+        "tackle",
+        "withdraw",
+    ]
+
+
+def test_player_move_websocket_rejects_out_of_range_move_index():
+    battle = client.post(
+        "/api/battles",
+        json={
+            "player_active_id": "charmander",
+            "player_bench_ids": ["squirtle", "bulbasaur"],
+            "opponent_team_ids": ["gengar", "pikachu", "eevee"],
+        },
+    ).json()
+
+    with client.websocket_connect(battle["ws_url"]) as websocket:
+        websocket.send_json({"type": "start_battle"})
+        websocket.receive_json()
+
+        websocket.send_json({"type": "player_move", "move_index": 99})
+        message = websocket.receive_json()
+
+    assert message == {"type": "error", "message": "invalid_move_index"}
+
+
 def test_player_move_websocket_executes_turn(monkeypatch):
     battle = client.post(
         "/api/battles",
@@ -89,6 +133,12 @@ def test_player_move_websocket_executes_turn(monkeypatch):
 
         websocket.send_json({"type": "player_move", "move_index": 2})
         message = websocket.receive_json()
+        turn_result = websocket.receive_json()
 
     assert executed_moves == [2]
     assert message == {"type": "phase_change", "data": {"phase": "resolving"}}
+    assert turn_result == {
+        "type": "turn_result",
+        "battle_id": battle["battle_id"],
+        "data": {"turn": 1, "events": ["turn resolved"]},
+    }

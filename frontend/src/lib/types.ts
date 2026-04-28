@@ -53,6 +53,11 @@ export type BattlePokemon = {
   status_turns?: number;
 };
 
+export type BattleTeam = {
+  active: BattlePokemon;
+  bench: BattlePokemon[];
+};
+
 export type TurnResult = {
   turn: number;
   player_move: string;
@@ -65,6 +70,11 @@ export type TurnResult = {
 
 export type BattleStateV2 = {
   battle_id: string;
+  player_active_id?: string;
+  player_bench_ids?: string[];
+  opponent_team_ids?: string[];
+  player_team?: BattleTeam;
+  opponent_team?: BattleTeam;
   player_team_id?: string;
   opponent_team_id?: string;
   current_turn: number;

@@ -22,6 +22,7 @@ def _team():
             "def_id": "charmander",
             "name": "Charmander",
             "types": ["fire"],
+            "moves": [{"id": "ember", "name": "Ember", "type": "fire", "category": "special", "power": 40, "accuracy": 100, "pp": 25}],
             "current_hp": 100,
             "max_hp": 120,
             "status": None,
@@ -95,6 +96,18 @@ async def test_turn_orchestrator_broadcasts_phases_in_order(monkeypatch):
 
     phases = [event["data"]["phase"] for event in ws.events if event["type"] == "phase_change"]
     assert phases == ["bench_observe", "trainer_strategy", "pokemon_decide", "resolving", "reflection"]
+
+
+@pytest.mark.asyncio
+async def test_turn_orchestrator_rejects_invalid_player_move_before_turn_starts():
+    ws = _WsRecorder()
+    orchestrator = TurnOrchestrator(_team(), _team(), ws)
+
+    with pytest.raises(ValueError, match="invalid_player_move_index"):
+        await orchestrator.execute_turn(1)
+
+    assert orchestrator.turn == 0
+    assert ws.events == []
 
 
 @pytest.mark.asyncio

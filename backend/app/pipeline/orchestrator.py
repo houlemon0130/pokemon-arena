@@ -23,6 +23,7 @@ class TurnOrchestrator:
         self.reflections = []
 
     async def execute_turn(self, player_move_index: int):
+        self._validate_move_index(self.player_team["active"], player_move_index, "player")
         self.turn += 1
 
         await self.ws.broadcast({"type": "phase_change", "data": {"phase": "bench_observe"}})
@@ -62,6 +63,13 @@ class TurnOrchestrator:
         await self.ws.broadcast({"type": "reflection_result", "data": reflection})
 
         return result
+
+    def _validate_move_index(self, pokemon, move_index: int, actor: str):
+        moves = pokemon.moves if isinstance(pokemon, BattlePokemon) else pokemon["moves"]
+        if not isinstance(move_index, int) or isinstance(move_index, bool):
+            raise ValueError(f"invalid_{actor}_move_index")
+        if move_index < 0 or move_index >= len(moves):
+            raise ValueError(f"invalid_{actor}_move_index")
 
     async def _run_bench_agent(self, bench_pokemon: dict) -> dict:
         return {

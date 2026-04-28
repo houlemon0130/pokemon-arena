@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef } from "react";
 
 import type {
   AgentDecision,
+  BattleStateV2,
   BattleSocketMessage,
   ChatMessage,
   ReflectionResult,
+  TurnResult,
   ToolCall,
 } from "@/lib/types";
 import { useBattleStore } from "@/store/battleStore";
@@ -23,6 +25,7 @@ export function useBattleSocket(battleId: string | null | undefined) {
     addChatMessage,
     addBattleLog,
     setAgentThinking,
+    setBattleState,
   } = useBattleStore();
 
   useEffect(() => {
@@ -62,7 +65,12 @@ export function useBattleSocket(battleId: string | null | undefined) {
             addChatMessage(message.data as ChatMessage);
             break;
           case "battle_started":
+            setBattleState(message.data as BattleStateV2);
             addBattleLog("Battle started");
+            break;
+          case "turn_result":
+            setAgentThinking(false);
+            ((message.data as TurnResult | undefined)?.events ?? []).forEach((event) => addBattleLog(event));
             break;
           case "error":
             addBattleLog(message.message ?? "WebSocket error");
@@ -96,6 +104,7 @@ export function useBattleSocket(battleId: string | null | undefined) {
     addChatMessage,
     addBattleLog,
     setAgentThinking,
+    setBattleState,
   ]);
 
   const sendMessage = useCallback((message: Record<string, unknown>) => {

@@ -80,8 +80,12 @@ def _serialize_turn_result(result) -> dict:
     return vars(result)
 
 
-def _public_battle(battle: dict) -> dict:
-    return {key: value for key, value in battle.items() if not key.startswith("_")}
+def _public_battle(battle: dict, orchestrator: TurnOrchestrator | None = None) -> dict:
+    data = {key: value for key, value in battle.items() if not key.startswith("_")}
+    if orchestrator is not None and hasattr(orchestrator, "player_team") and hasattr(orchestrator, "opponent_team"):
+        data["player_team"] = orchestrator.player_team
+        data["opponent_team"] = orchestrator.opponent_team
+    return data
 
 
 def _get_orchestrator(battle: dict, websocket: WebSocket):
@@ -115,8 +119,9 @@ async def battle_websocket(websocket: WebSocket, battle_id: str):
                 continue
             if message_type == "start_battle":
                 battle["phase"] = "started"
+                orchestrator = _get_orchestrator(battle, websocket)
                 await websocket.send_json(
-                    {"type": "battle_started", "battle_id": battle_id, "data": _public_battle(battle)}
+                    {"type": "battle_started", "battle_id": battle_id, "data": _public_battle(battle, orchestrator)}
                 )
             elif message_type == "player_move":
                 if battle.get("phase") == "unknown":
@@ -126,7 +131,13 @@ async def battle_websocket(websocket: WebSocket, battle_id: str):
                 if not isinstance(move_index, int):
                     await websocket.send_json({"type": "error", "message": "invalid_move_index"})
                     continue
-                result = await _get_orchestrator(battle, websocket).execute_turn(move_index)
+                try:
+                    result = await _get_orchestrator(battle, websocket).execute_turn(move_index)
+                except ValueError as exc:
+                    if str(exc) == "invalid_player_move_index":
+                        await websocket.send_json({"type": "error", "message": "invalid_move_index"})
+                        continue
+                    raise
                 await websocket.send_json(
                     {
                         "type": "turn_result",
