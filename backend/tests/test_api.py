@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.ws.battle_ws as battle_ws
 from app.main import app
 
 
@@ -58,3 +59,36 @@ def test_battle_websocket_connects():
         message = websocket.receive_json()
 
     assert message["type"] == "battle_started"
+
+
+def test_player_move_websocket_executes_turn(monkeypatch):
+    battle = client.post(
+        "/api/battles",
+        json={
+            "player_active_id": "charmander",
+            "player_bench_ids": ["squirtle", "bulbasaur"],
+            "opponent_team_ids": ["gengar", "pikachu", "eevee"],
+        },
+    ).json()
+    executed_moves = []
+
+    class FakeOrchestrator:
+        def __init__(self, opponent_team, player_team, ws_handler):
+            self.ws = ws_handler
+
+        async def execute_turn(self, player_move_index):
+            executed_moves.append(player_move_index)
+            await self.ws.broadcast({"type": "phase_change", "data": {"phase": "resolving"}})
+            return {"turn": 1, "events": ["turn resolved"]}
+
+    monkeypatch.setattr(battle_ws, "TurnOrchestrator", FakeOrchestrator, raising=False)
+
+    with client.websocket_connect(battle["ws_url"]) as websocket:
+        websocket.send_json({"type": "start_battle"})
+        websocket.receive_json()
+
+        websocket.send_json({"type": "player_move", "move_index": 2})
+        message = websocket.receive_json()
+
+    assert executed_moves == [2]
+    assert message == {"type": "phase_change", "data": {"phase": "resolving"}}

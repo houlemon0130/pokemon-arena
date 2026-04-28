@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { useParams } from "next/navigation";
 
 import { ActivePokemonPanel } from "@/components/battle/ActivePokemonPanel";
@@ -32,7 +33,15 @@ export default function BattlePage() {
   const selectedMove = useBattleStore((state) => state.selectedMove);
   const setSelectedMove = useBattleStore((state) => state.setSelectedMove);
   const battleLog = useBattleStore((state) => state.battleLog);
-  useBattleSocket(params.id);
+  const { sendMessage } = useBattleSocket(params.id);
+
+  const handleSelectMove = useCallback(
+    (index: number) => {
+      setSelectedMove(index);
+      sendMessage({ type: "player_move", move_index: index });
+    },
+    [sendMessage, setSelectedMove],
+  );
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -41,7 +50,7 @@ export default function BattlePage() {
         <aside className="space-y-4">
           <OpponentPokemonCard name="Gengar" hp={115} maxHp={115} status={null} />
           <PlayerPokemonCard name="Charmander" hp={120} maxHp={120} status={null} fear={0} />
-          <MoveSelector moves={DEFAULT_MOVES} selectedMove={selectedMove} onSelect={setSelectedMove} />
+          <MoveSelector moves={DEFAULT_MOVES} selectedMove={selectedMove} onSelect={handleSelectMove} />
         </aside>
         <section className="min-h-[520px] rounded-lg border border-zinc-800 bg-black">
           <BattleCanvas />

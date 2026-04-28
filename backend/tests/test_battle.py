@@ -45,6 +45,80 @@ def test_faster_agent_moves_first(monkeypatch):
     assert result.events[0].startswith("Pikachu used Quick Attack")
 
 
+def test_priority_move_goes_before_faster_opponent(monkeypatch):
+    monkeypatch.setattr("app.engine.battle.random.random", lambda: 0.5)
+    monkeypatch.setattr("app.engine.damage.random.uniform", lambda _low, _high: 1.0)
+    player = _mon(
+        "Pikachu",
+        ["electric"],
+        [
+            MoveDef(
+                id="quick_attack",
+                name="Quick Attack",
+                type="normal",
+                category="physical",
+                power=40,
+                accuracy=100,
+                pp=30,
+                priority=1,
+            )
+        ],
+        speed=60,
+    )
+    agent = _mon(
+        "Gengar",
+        ["ghost", "poison"],
+        [
+            MoveDef(
+                id="shadow_ball",
+                name="Shadow Ball",
+                type="ghost",
+                category="special",
+                power=80,
+                accuracy=100,
+                pp=15,
+            )
+        ],
+        speed=120,
+    )
+
+    result = resolve_turn(player, agent, 0, 0)
+
+    assert result.events[0].startswith("Pikachu used Quick Attack")
+
+
+def test_status_move_applies_status_to_defender(monkeypatch):
+    monkeypatch.setattr("app.engine.battle.random.random", lambda: 0.5)
+    player = _mon(
+        "Pikachu",
+        ["electric"],
+        [
+            MoveDef(
+                id="thunder_wave",
+                name="Thunder Wave",
+                type="electric",
+                category="status",
+                accuracy=100,
+                pp=20,
+                effect="paralysis",
+            )
+        ],
+        speed=100,
+    )
+    agent = _mon(
+        "Bulbasaur",
+        ["grass", "poison"],
+        [MoveDef(id="tackle", name="Tackle", type="normal", category="physical", power=40, accuracy=100, pp=35)],
+        speed=80,
+    )
+
+    result = resolve_turn(player, agent, 0, 0)
+
+    assert agent.status == "paralysis"
+    assert result.player_damage == 0
+    assert any("Bulbasaur is now paralysis" in event for event in result.events)
+
+
 def test_fainted_pokemon_does_not_move(monkeypatch):
     monkeypatch.setattr("app.engine.battle.random.random", lambda: 0.5)
     monkeypatch.setattr("app.engine.damage.random.uniform", lambda _low, _high: 1.0)

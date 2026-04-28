@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import type {
   AgentDecision,
@@ -98,5 +98,11 @@ export function useBattleSocket(battleId: string | null | undefined) {
     setAgentThinking,
   ]);
 
-  return socketRef;
+  const sendMessage = useCallback((message: Record<string, unknown>) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
+  return { sendMessage, socketRef };
 }

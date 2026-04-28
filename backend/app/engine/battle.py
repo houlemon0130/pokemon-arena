@@ -1,7 +1,7 @@
 import random
 
 from app.engine.damage import calculate_damage
-from app.engine.effects import apply_burn_damage, get_effective_speed
+from app.engine.effects import apply_burn_damage, get_effective_speed, try_apply_status
 from app.engine.type_chart import get_effectiveness
 from app.models.battle import BattlePokemon, TurnResult
 from app.models.pokemon import MoveDef
@@ -46,6 +46,16 @@ def _apply_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef,
         return 0
 
     events.append(f"{attacker.name} used {move.name}.")
+    if move.category == "status":
+        if move.effect in {"burn", "paralysis", "sleep", "confusion"}:
+            previous_status = defender.status
+            defender.status = try_apply_status(defender.status, move.effect)
+            if defender.status != previous_status:
+                events.append(f"{defender.name} is now {defender.status}.")
+            else:
+                events.append(f"{move.name} had no effect.")
+        return 0
+
     if move.power is None:
         return 0
 
@@ -98,13 +108,13 @@ def resolve_turn(
     player_speed = get_effective_speed(player_mon.stats.speed, player_mon.status)
     agent_speed = get_effective_speed(agent_mon.stats.speed, agent_mon.status)
     order = [
-        ("player", player_mon, agent_mon, player_move),
-        ("agent", agent_mon, player_mon, agent_move),
+        ("player", player_mon, agent_mon, player_move, player_move.priority, player_speed),
+        ("agent", agent_mon, player_mon, agent_move, agent_move.priority, agent_speed),
     ]
-    if agent_speed > player_speed:
+    if (agent_move.priority, agent_speed) > (player_move.priority, player_speed):
         order.reverse()
 
-    for side, attacker, defender, move in order:
+    for side, attacker, defender, move, _priority, _speed in order:
         damage = _apply_move(attacker, defender, move, events)
         if side == "player":
             player_damage += damage

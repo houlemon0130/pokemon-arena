@@ -1,9 +1,11 @@
 import asyncio
-from types import SimpleNamespace
 
 from app.agents.reflection import run_reflection
 from app.behavior.battle_lust import accumulate_battle_lust
 from app.behavior.opponent_model import OpponentModel
+from app.engine.battle import resolve_turn
+from app.models.battle import BattlePokemon
+from app.models.pokemon import MoveDef, Personality, Stats
 from app.pipeline.streaming import call_llm
 from app.tools.registry import ToolRegistry
 
@@ -93,15 +95,43 @@ class TurnOrchestrator:
         )
 
     def _resolve_turn(self, player_move_index: int, agent_move_index: int):
-        return SimpleNamespace(
-            turn=self.turn,
-            player_move=str(player_move_index),
-            agent_move=str(agent_move_index),
-            player_damage=0,
-            agent_damage=0,
-            events=[],
-            hp_after={},
+        player_mon = self._as_battle_pokemon(self.player_team["active"])
+        agent_mon = self._as_battle_pokemon(self.opponent_team["active"])
+        result = resolve_turn(player_mon, agent_mon, player_move_index, agent_move_index)
+        self._sync_runtime_pokemon(self.player_team["active"], player_mon)
+        self._sync_runtime_pokemon(self.opponent_team["active"], agent_mon)
+        return result
+
+    def _as_battle_pokemon(self, pokemon):
+        if isinstance(pokemon, BattlePokemon):
+            return pokemon
+
+        return BattlePokemon(
+            def_id=pokemon["def_id"],
+            name=pokemon["name"],
+            types=pokemon["types"],
+            stats=Stats(**pokemon["stats"]) if isinstance(pokemon["stats"], dict) else pokemon["stats"],
+            moves=[
+                MoveDef(**move) if isinstance(move, dict) else move
+                for move in pokemon["moves"]
+            ],
+            personality=(
+                Personality(**pokemon["personality"])
+                if isinstance(pokemon.get("personality"), dict)
+                else pokemon.get("personality")
+            ),
+            current_hp=pokemon["current_hp"],
+            max_hp=pokemon["max_hp"],
+            status=pokemon.get("status"),
+            status_turns=pokemon.get("status_turns", 0),
         )
+
+    def _sync_runtime_pokemon(self, target, source: BattlePokemon):
+        if isinstance(target, BattlePokemon):
+            return
+        target["current_hp"] = source.current_hp
+        target["status"] = source.status
+        target["status_turns"] = source.status_turns
 
     def _update_behavior_states(self, result, pokemon_decision: dict):
         return None
