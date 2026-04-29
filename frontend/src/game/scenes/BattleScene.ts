@@ -34,6 +34,8 @@ export class BattleScene extends Phaser.Scene {
   private opponentSide?: BattleSide;
   private unsubscribeStore?: () => void;
   private currentBattleState: BattleStateV2 | null = null;
+  /** Active timers that should be cancelled when a new animation starts */
+  private activeTimers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
     super("BattleScene");
@@ -46,8 +48,8 @@ export class BattleScene extends Phaser.Scene {
   create() {
     new BattleBackground(this);
 
-    this.playerSide = this.createBattleSide("Charmander", "back", PLAYER_POSITION.x, PLAYER_POSITION.y, 92, 436);
-    this.opponentSide = this.createBattleSide("Gengar", "front", OPPONENT_POSITION.x, OPPONENT_POSITION.y, 528, 266);
+    this.playerSide = this.createBattleSide("", "back", PLAYER_POSITION.x, PLAYER_POSITION.y, 92, 436);
+    this.opponentSide = this.createBattleSide("", "front", OPPONENT_POSITION.x, OPPONENT_POSITION.y, 528, 266);
 
     const initialStore = useBattleStore.getState();
     this.syncBattleState(initialStore.battleState);
@@ -85,6 +87,14 @@ export class BattleScene extends Phaser.Scene {
     };
   }
 
+  /** Cancel all active delayed timers (used when starting a new animation) */
+  private cancelActiveTimers() {
+    this.activeTimers.forEach((timer) => {
+      timer.remove(false);
+    });
+    this.activeTimers = [];
+  }
+
   private syncBattleState(battleState: BattleStateV2 | null) {
     this.currentBattleState = battleState;
     this.syncSide(this.playerSide, battleState?.player_team?.active, "back");
@@ -100,16 +110,26 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    // HP bar: use smooth animation if transitioning from a known previous HP
     const hpValue = pokemon.max_hp > 0 ? pokemon.current_hp / pokemon.max_hp : 0;
+    if (side.previousHp !== null && side.previousHp !== pokemon.current_hp) {
+      const prevValue = side.previousHp / pokemon.max_hp;
+      side.hpBar.setValue(prevValue);
+      side.hpBar.animateTo(hpValue, 400);
+    } else {
+      side.hpBar.setValue(hpValue);
+    }
+
     side.sprite.setPokemon(pokemon.def_id, spriteSide);
-    side.hpBar.setValue(hpValue);
     side.nameText.setText(pokemon.name);
 
     if (side.previousDefId && side.previousDefId !== pokemon.def_id) {
       side.sprite.onAppear();
     }
     if (side.previousHp !== null && side.previousHp > 0 && pokemon.current_hp <= 0) {
-      this.time.delayedCall(480, () => side.sprite.onFaint());
+      this.time.delayedCall(480, () => {
+        side.sprite.onFaint();
+      });
     }
     if (side.previousHp !== null && side.previousHp <= 0 && pokemon.current_hp > 0) {
       side.sprite.onAppear();
@@ -120,9 +140,15 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playTurnAnimation(animation: TurnAnimation) {
+    // Cancel any stale animations from the previous turn
+    this.cancelActiveTimers();
+
     const delay = animation.timing?.delay_ms ?? 520;
     animation.actions.forEach((action, index) => {
-      this.time.delayedCall(index * delay, () => this.playActionEffect(action));
+      const timer = this.time.delayedCall(index * delay, () => {
+        this.playActionEffect(action);
+      });
+      this.activeTimers.push(timer);
     });
   }
 
@@ -148,7 +174,12 @@ export class BattleScene extends Phaser.Scene {
       NormalEffect(this, targetPoint.x, targetPoint.y - 84, direction);
     }
 
-    this.time.delayedCall(160, () => this.sideFor(target)?.sprite.onHit());
+    // Hit flash effect on the target sprite
+    const hitTimer = this.time.delayedCall(160, () => {
+      const targetSide = this.sideFor(target);
+      targetSide?.sprite.onHit();
+    });
+    this.activeTimers.push(hitTimer);
   }
 
   private resolveMoveType(action: BattleAnimationAction) {
@@ -179,6 +210,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private destroyScene() {
+    // Cancel all active timers and tweens
+    this.cancelActiveTimers();
+    this.tweens.killAll();
+
     this.unsubscribeStore?.();
     this.unsubscribeStore = undefined;
   }

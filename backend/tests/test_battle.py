@@ -31,7 +31,7 @@ def test_resolve_turn_deals_damage_and_logs_events(monkeypatch):
     assert result.agent_damage > 0
     assert agent.current_hp < agent.max_hp
     assert player.current_hp < player.max_hp
-    assert any("Charmander used Ember" in event for event in result.events)
+    assert any("Charmander 使用了 Ember" in event for event in result.events)
 
 
 def test_faster_agent_moves_first(monkeypatch):
@@ -42,7 +42,7 @@ def test_faster_agent_moves_first(monkeypatch):
 
     result = resolve_turn(player, agent, 0, 0)
 
-    assert result.events[0].startswith("Pikachu used Quick Attack")
+    assert result.events[0].startswith("Pikachu 使用了 Quick Attack")
 
 
 def test_priority_move_goes_before_faster_opponent(monkeypatch):
@@ -84,7 +84,7 @@ def test_priority_move_goes_before_faster_opponent(monkeypatch):
 
     result = resolve_turn(player, agent, 0, 0)
 
-    assert result.events[0].startswith("Pikachu used Quick Attack")
+    assert result.events[0].startswith("Pikachu 使用了 Quick Attack")
 
 
 def test_status_move_applies_status_to_defender(monkeypatch):
@@ -116,7 +116,7 @@ def test_status_move_applies_status_to_defender(monkeypatch):
 
     assert agent.status == "paralysis"
     assert result.player_damage == 0
-    assert any("Bulbasaur is now paralysis" in event for event in result.events)
+    assert any("Bulbasaur 陷入了 麻痹 状态！" in event for event in result.events)
 
 
 def test_fainted_pokemon_does_not_move(monkeypatch):
@@ -129,4 +129,4 @@ def test_fainted_pokemon_does_not_move(monkeypatch):
 
     assert agent.current_hp == 0
     assert result.agent_damage == 0
-    assert any("Bulbasaur fainted" in event for event in result.events)
+    assert any("Bulbasaur 倒下了！" in event for event in result.events)

@@ -54,6 +54,7 @@ def _build_runtime_pokemon(pokemon_id: str) -> dict:
         "status": None,
         "status_turns": 0,
         "battle_lust": personality["battle_lust_base"],
+        "fear": 0.0,
     }
 
 
@@ -172,11 +173,15 @@ async def battle_websocket(websocket: WebSocket, battle_id: str):
                 if battle.get("phase") == "ended":
                     await websocket.send_json({"type": "error", "message": "battle_already_ended"})
                     continue
+                if battle.get("_turn_in_progress"):
+                    await websocket.send_json({"type": "error", "message": "turn_in_progress"})
+                    continue
                 move_index = message.get("move_index")
                 if not isinstance(move_index, int):
                     await websocket.send_json({"type": "error", "message": "invalid_move_index"})
                     continue
                 try:
+                    battle["_turn_in_progress"] = True
                     orchestrator = _get_orchestrator(battle, websocket)
                     result = await orchestrator.execute_turn(move_index)
                 except ValueError as exc:
@@ -184,6 +189,8 @@ async def battle_websocket(websocket: WebSocket, battle_id: str):
                         await websocket.send_json({"type": "error", "message": "invalid_move_index"})
                         continue
                     raise
+                finally:
+                    battle["_turn_in_progress"] = False
                 result_data = _serialize_turn_result(result)
                 winner = _record_turn_result(battle, result_data, orchestrator)
                 await websocket.send_json(

@@ -22,6 +22,18 @@ export class HPBar {
     this.draw();
   }
 
+  animateTo(targetValue: number, durationMs: number) {
+    const clampedTarget = Phaser.Math.Clamp(targetValue, 0, 1);
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.add({
+      targets: this,
+      value: clampedTarget,
+      duration: durationMs,
+      ease: "Sine.easeOut",
+      onUpdate: () => this.draw(),
+    });
+  }
+
   private draw() {
     this.bar.clear();
     this.bar.fillStyle(0x111827, 1);

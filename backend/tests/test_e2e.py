@@ -82,7 +82,7 @@ async def test_complete_battle_flow_records_turn_results_winner_and_history(monk
             assert turn_result["battle_id"] == battle["battle_id"]
             assert turn_result["data"]["turn"] == expected_turn
             assert turn_result["data"]["events"]
-            assert "杰尼龟 used 水枪." in turn_result["data"]["events"] or "It's super effective!" in turn_result["data"]["events"]
+            assert "杰尼龟 使用了 水枪！" in turn_result["data"]["events"] or "效果拔群！" in turn_result["data"]["events"]
             assert set(turn_result["data"]["hp_after"]) == {"squirtle", "charmander"}
 
         ended = websocket.receive_json()

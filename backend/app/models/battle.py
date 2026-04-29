@@ -16,6 +16,8 @@ class BattlePokemon(BaseModel):
     max_hp: int
     status: str | None = None
     status_turns: int = 0
+    fear: float = 0.0
+    battle_lust: float = 0.0
 
 
 class TurnResult(BaseModel):

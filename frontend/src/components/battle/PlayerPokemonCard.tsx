@@ -1,12 +1,20 @@
+const statusMap: Record<string, string> = {
+  burn: "烧伤",
+  paralysis: "麻痹",
+  sleep: "睡眠",
+  poison: "中毒",
+  confusion: "混乱",
+};
+
 type PlayerPokemonCardProps = {
   name: string;
   hp: number;
   maxHp: number;
   status?: string | null;
-  fear?: number;
+  fear: number;
 };
 
-export function PlayerPokemonCard({ name, hp, maxHp, status, fear = 0 }: PlayerPokemonCardProps) {
+export function PlayerPokemonCard({ name, hp, maxHp, status, fear }: PlayerPokemonCardProps) {
   const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
   const fearPct = Math.max(0, Math.min(100, fear * 100));
 
@@ -17,7 +25,7 @@ export function PlayerPokemonCard({ name, hp, maxHp, status, fear = 0 }: PlayerP
           <h2 className="text-base font-semibold text-zinc-100">{name}</h2>
           <p className="mt-1 text-xs text-zinc-400">玩家上场宝可梦</p>
         </div>
-        {status ? <span className="rounded bg-red-400/15 px-2 py-1 text-xs text-red-200">{status}</span> : null}
+        {status ? <span className="rounded bg-red-400/15 px-2 py-1 text-xs text-red-200">{statusMap[status] ?? status}</span> : null}
       </div>
       <div className="mt-4">
         <div className="mb-1 flex justify-between text-xs text-zinc-400">

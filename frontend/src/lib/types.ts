@@ -51,6 +51,8 @@ export type BattlePokemon = {
   max_hp: number;
   status?: string | null;
   status_turns?: number;
+  fear?: number;
+  battle_lust?: number;
 };
 
 export type BattleTeam = {

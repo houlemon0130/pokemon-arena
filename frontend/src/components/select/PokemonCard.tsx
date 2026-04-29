@@ -4,15 +4,6 @@ import Image from "next/image";
 
 import type { PokemonDef } from "@/lib/types";
 
-const SPRITE_IDS: Record<string, number> = {
-  bulbasaur: 1,
-  charmander: 4,
-  squirtle: 7,
-  pikachu: 25,
-  gengar: 94,
-  eevee: 133,
-};
-
 type PokemonCardProps = {
   pokemon: PokemonDef;
   selected: boolean;
@@ -21,7 +12,7 @@ type PokemonCardProps = {
 };
 
 export function PokemonCard({ pokemon, selected, selectedOrder, onToggle }: PokemonCardProps) {
-  const spriteId = SPRITE_IDS[pokemon.id] ?? 25;
+  const englishName = pokemon.id.charAt(0).toUpperCase() + pokemon.id.slice(1);
 
   return (
     <button
@@ -61,7 +52,7 @@ export function PokemonCard({ pokemon, selected, selectedOrder, onToggle }: Poke
           <dd className="text-zinc-200">{pokemon.stats.speed}</dd>
         </dl>
         <Image
-          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/${spriteId}.gif`}
+          src={`https://play.pokemonshowdown.com/sprites/ani/${englishName}.gif`}
           alt={pokemon.name}
           width={96}
           height={96}

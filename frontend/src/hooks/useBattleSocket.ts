@@ -51,6 +51,14 @@ export function useBattleSocket(battleId: string | null | undefined) {
           case "phase_change":
             s.addBattleLog(`Phase: ${(message.data as { phase?: string })?.phase ?? "unknown"}`);
             s.setAgentThinking(true);
+            // Clear previous agent streams when entering a new phase
+            s.clearAgentStreams();
+            break;
+          case "agent_stream":
+            {
+              const data = message.data as { agent_id: string; chunk: string; replace?: boolean };
+              s.appendAgentStream(data.agent_id, data.chunk, data.replace ?? false);
+            }
             break;
           case "agent_decision":
             {
@@ -59,7 +67,6 @@ export function useBattleSocket(battleId: string | null | undefined) {
                 s.addAgentDecision(decision);
               }
             }
-            s.setAgentThinking(false);
             break;
           case "tool_call":
             s.addToolCall(message.data as ToolCall);
@@ -75,7 +82,7 @@ export function useBattleSocket(battleId: string | null | undefined) {
             break;
           case "battle_started":
             s.setBattleState(message.data as BattleStateV2);
-            s.addBattleLog("Battle started");
+            s.addBattleLog("对战开始");
             break;
           case "turn_animation":
             s.setTurnAnimation(normalizeTurnAnimation(message.data, useBattleStore.getState().battleState));

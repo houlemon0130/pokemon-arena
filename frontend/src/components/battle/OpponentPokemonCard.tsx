@@ -1,3 +1,11 @@
+const statusMap: Record<string, string> = {
+  burn: "烧伤",
+  paralysis: "麻痹",
+  sleep: "睡眠",
+  poison: "中毒",
+  confusion: "混乱",
+};
+
 type OpponentPokemonCardProps = {
   name: string;
   hp: number;
@@ -15,7 +23,7 @@ export function OpponentPokemonCard({ name, hp, maxHp, status }: OpponentPokemon
           <h2 className="text-base font-semibold text-zinc-100">{name}</h2>
           <p className="mt-1 text-xs text-zinc-400">对手上场宝可梦</p>
         </div>
-        {status ? <span className="rounded bg-violet-400/15 px-2 py-1 text-xs text-violet-200">{status}</span> : null}
+        {status ? <span className="rounded bg-violet-400/15 px-2 py-1 text-xs text-violet-200">{statusMap[status] ?? status}</span> : null}
       </div>
       <div className="mt-4">
         <div className="mb-1 flex justify-between text-xs text-zinc-400">

@@ -55,7 +55,7 @@ export default function BattlePage() {
             hp={playerPokemon?.current_hp ?? 0}
             maxHp={playerPokemon?.max_hp ?? 1}
             status={playerPokemon?.status ?? null}
-            fear={0}
+            fear={playerPokemon?.fear ?? 0}
           />
           <MoveSelector moves={moves} selectedMove={selectedMove} onSelect={handleSelectMove} />
         </aside>

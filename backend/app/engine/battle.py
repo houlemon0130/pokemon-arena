@@ -39,20 +39,20 @@ def _apply_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef,
     if attacker.status == "sleep":
         if random.random() < 1 / 3:
             attacker.status = None
-            events.append(f"{attacker.name} woke up!")
+            events.append(f"{attacker.name} 醒了过来！")
         else:
-            events.append(f"{attacker.name} is asleep.")
+            events.append(f"{attacker.name} 正在睡觉。")
             return 0
 
     if attacker.status == "paralysis" and random.random() < 0.25:
-        events.append(f"{attacker.name} is paralyzed and cannot move.")
+        events.append(f"{attacker.name} 麻痹了，无法行动！")
         return 0
 
     if not _move_hits(move):
-        events.append(f"{attacker.name} used {move.name}, but it missed!")
+        events.append(f"{attacker.name} 使用了 {move.name}，但是没有命中！")
         return 0
 
-    events.append(f"{attacker.name} used {move.name}.")
+    events.append(f"{attacker.name} 使用了 {move.name}！")
     if move.category == "status":
         effect = move.effect
         if effect:
@@ -61,9 +61,11 @@ def _apply_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef,
                 previous_status = defender.status
                 defender.status = try_apply_status(defender.status, status_name, chance)
                 if defender.status != previous_status and defender.status is not None:
-                    events.append(f"{defender.name} is now {defender.status}.")
+                    # 翻译状态名称
+                    status_cn = {"burn": "烧伤", "paralysis": "麻痹", "sleep": "睡眠", "confusion": "混乱"}.get(defender.status, defender.status)
+                    events.append(f"{defender.name} 陷入了 {status_cn} 状态！")
                 elif defender.status == previous_status and previous_status is not None:
-                    events.append(f"{move.name} had no effect.")
+                    events.append(f"{move.name} 没有效果。")
         return 0
 
     if move.power is None:
@@ -78,17 +80,17 @@ def _apply_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef,
     defender.current_hp = max(defender.current_hp - damage, 0)
 
     if critical > 1.0:
-        events.append("Critical hit!")
+        events.append("会心一击！")
     if type_mult >= 2:
-        events.append("It's super effective!")
+        events.append("效果拔群！")
     elif type_mult == 0:
-        events.append("It had no effect.")
+        events.append("没有效果...")
     elif type_mult <= 0.5:
-        events.append("It's not very effective.")
-    events.append(f"{move.name} dealt {damage} damage.")
+        events.append("效果不理想...")
+    events.append(f"{move.name} 造成了 {damage} 点伤害！")
 
     if _is_fainted(defender):
-        events.append(f"{defender.name} fainted.")
+        events.append(f"{defender.name} 倒下了！")
     return damage
 
 
@@ -98,9 +100,9 @@ def _apply_end_of_turn_effects(pokemon: BattlePokemon, events: list[str]):
     if pokemon.status == "burn":
         damage = min(apply_burn_damage(pokemon.max_hp), pokemon.current_hp)
         pokemon.current_hp = max(pokemon.current_hp - damage, 0)
-        events.append(f"{pokemon.name} is hurt by its burn for {damage} damage.")
+        events.append(f"{pokemon.name} 被烧伤烫伤了，受到 {damage} 点伤害！")
         if _is_fainted(pokemon):
-            events.append(f"{pokemon.name} fainted.")
+            events.append(f"{pokemon.name} 倒下了！")
 
 
 def resolve_turn(
