@@ -34,3 +34,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tool configs
+/.agents/
+/.claude/
+/.iflow/
+/.qoder/
+/skills/
+/skills-lock.json
