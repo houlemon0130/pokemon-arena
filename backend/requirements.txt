@@ -4,6 +4,5 @@ pydantic
 httpx
 websockets
 python-dotenv
-crewai
 pytest
 pytest-asyncio

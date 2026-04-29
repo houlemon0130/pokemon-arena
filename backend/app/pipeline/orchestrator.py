@@ -6,9 +6,10 @@ import re
 from app.agents.prompts.bench import build_bench_system_prompt, build_bench_turn_message
 from app.agents.reflection import run_reflection
 from app.behavior.battle_lust import accumulate_battle_lust
-from app.behavior.fear import accumulate_fear
+from app.behavior.fear import accumulate_fear, express_fear
 from app.behavior.opponent_model import OpponentModel
-from app.engine.battle import resolve_turn
+from app.behavior.social import get_bond, load_social_graph
+from app.engine.battle import _apply_end_of_turn_effects, apply_single_move, resolve_turn
 from app.engine.type_chart import get_effectiveness
 from app.models.battle import BattlePokemon
 from app.models.pokemon import MoveDef, Personality, Stats
@@ -30,6 +31,9 @@ class TurnOrchestrator:
         self.turn = 0
         self.reflections = []
         self.disconnected = False
+        # Feature 4: 反思洞察累积，影响后续回合
+        self._trainer_insights: list[str] = []
+        self._cumulative_confidence_delta: float = 0.0
 
     async def _broadcast_safe(self, event: dict):
         """安全广播，捕获连接异常后设置 disconnected 标志."""
@@ -97,6 +101,29 @@ class TurnOrchestrator:
         if self.disconnected:
             return None
 
+        # Feature 1: 检查玩家宝可梦恐惧值是否达到逃跑阈值
+        player_fear = self.player_team["active"].get("fear", 0.0)
+        if player_fear >= 0.9:
+            retreat_event = {
+                "type": "pokemon_retreat",
+                "data": {
+                    "pokemon": self.player_team["active"]["name"],
+                    "reason": f"恐惧值过高 ({player_fear:.0%})，{self.player_team['active']['name']} 因极度恐惧而逃跑了！",
+                },
+            }
+            await self._broadcast_safe(retreat_event)
+            # 构造一个表示玩家逃跑的战败结果
+            from types import SimpleNamespace
+            surrender_result = SimpleNamespace(
+                turn=self.turn,
+                player_move="逃跑",
+                agent_move=pokemon_decision.get("chosen_move_name", ""),
+                player_damage=0,
+                agent_damage=0,
+                events=[f"{self.player_team['active']['name']} 因极度恐惧而逃跑了！"],
+            )
+            return surrender_result
+
         result = self._resolve_turn(player_move_index, pokemon_decision["chosen_move_index"])
         result.turn = self.turn
         # Feature 1: 传入 player_move_index，记录玩家行为
@@ -114,7 +141,157 @@ class TurnOrchestrator:
         self.reflections.append(reflection)
         await self._broadcast_safe({"type": "reflection_result", "data": reflection})
 
+        # Feature 4: 根据反思结果更新后续回合的行为参数
+        if reflection.get("decision_was_correct") is False:
+            self._cumulative_confidence_delta -= 0.05
+        if reflection.get("learned_insight"):
+            self._trainer_insights.append(reflection["learned_insight"])
+
         return result
+
+    async def execute_switch(self, bench_idx: int):
+        """处理玩家换人请求：交换 active 与 bench[bench_idx]，对手继续攻击."""
+        self.turn += 1
+
+        # 交换 active 与 bench
+        active_pokemon = self.player_team["active"]
+        bench_pokemon = self.player_team["bench"][bench_idx]
+        await self._broadcast_safe({
+            "type": "pokemon_switch",
+            "data": {
+                "out": active_pokemon["name"],
+                "in": bench_pokemon["name"],
+                "reason": f"{active_pokemon['name']}，回来吧！上吧，{bench_pokemon['name']}！",
+            },
+        })
+        self.player_team["active"] = bench_pokemon
+        self.player_team["bench"][bench_idx] = active_pokemon
+
+        # 执行对手方的完整 agent 流水线
+        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "bench_observe"}})
+        for bp in self.opponent_team["bench"]:
+            bp["battle_lust"] = accumulate_battle_lust(
+                bp.get("battle_lust", 0.3),
+                bp["types"][0],
+                self.player_team["active"]["types"],
+                self.opponent_team["active"]["current_hp"] < self.opponent_team["active"]["max_hp"] * 0.3,
+                self.opponent_team["active"]["status"] is not None,
+            )
+        bench_results = await asyncio.gather(
+            *(self._run_bench_agent(bp) for bp in self.opponent_team["bench"])
+        )
+        for r in bench_results:
+            await self._broadcast_safe({"type": "bench_opinion", "data": r})
+        if self.disconnected:
+            return None
+
+        await self._generate_team_chat(bench_results)
+
+        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "trainer_strategy"}})
+        tool_results = await self._execute_trainer_tools()
+
+        trainer_decision = await self._run_trainer_agent(bench_results, tool_results)
+        await self._broadcast_safe(
+            {"type": "agent_decision", "data": self._trainer_decision_payload(trainer_decision)}
+        )
+
+        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "pokemon_decide"}})
+        pokemon_decision = await self._run_pokemon_agent(trainer_decision)
+        await self._broadcast_safe(
+            {"type": "agent_decision", "data": self._pokemon_decision_payload(pokemon_decision)}
+        )
+
+        await self._generate_cross_talk(pokemon_decision)
+
+        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "resolving"}})
+        if self.disconnected:
+            return None
+
+        # 换人回合：玩家不攻击，只有对手攻击
+        result = self._resolve_switch_turn(pokemon_decision["chosen_move_index"])
+        result.turn = self.turn
+        # 记录行为（玩家没有出招）
+        self._update_behavior_states_switch(result, pokemon_decision)
+
+        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "reflection"}})
+        if self.disconnected:
+            return None
+        reflection = await run_reflection(
+            self.opponent_team["active"]["def_id"],
+            pokemon_decision,
+            result,
+            self.opponent_team["active"].get("personality"),
+        )
+        self.reflections.append(reflection)
+        await self._broadcast_safe({"type": "reflection_result", "data": reflection})
+
+        # Feature 4: 根据反思结果更新后续回合的行为参数
+        if reflection.get("decision_was_correct") is False:
+            self._cumulative_confidence_delta -= 0.05
+        if reflection.get("learned_insight"):
+            self._trainer_insights.append(reflection["learned_insight"])
+
+        return result
+
+    def _resolve_switch_turn(self, agent_move_index: int):
+        """换人回合结算：玩家不攻击，对手攻击换上的宝可梦."""
+        player_mon = self._as_battle_pokemon(self.player_team["active"])
+        agent_mon = self._as_battle_pokemon(self.opponent_team["active"])
+        agent_move = agent_mon.moves[agent_move_index]
+        events: list = [f"上吧，{player_mon.name}！"]
+
+        # 只执行对手攻击
+        agent_damage = apply_single_move(agent_mon, player_mon, agent_move, events)
+
+        # 回合末效果
+        _apply_end_of_turn_effects(player_mon, events)
+        _apply_end_of_turn_effects(agent_mon, events)
+
+        from app.models.battle import TurnResult
+        result = TurnResult(
+            turn=0,
+            player_move="换人",
+            agent_move=agent_move.name,
+            player_damage=0,  # 玩家没有攻击
+            agent_damage=agent_damage,
+            events=events,
+            hp_after={
+                player_mon.def_id: player_mon.current_hp,
+                agent_mon.def_id: agent_mon.current_hp,
+            },
+        )
+        self._sync_runtime_pokemon(self.player_team["active"], player_mon)
+        self._sync_runtime_pokemon(self.opponent_team["active"], agent_mon)
+        return result
+
+    def _update_behavior_states_switch(self, result, pokemon_decision: dict):
+        """换人回合后的行为状态更新（玩家没有出招，只积累玩家宝可梦恐惧）."""
+        player_mon = self.player_team["active"]
+        agent_mon = self.opponent_team["active"]
+        agent_move_index = pokemon_decision.get("chosen_move_index", 0)
+        if isinstance(agent_move_index, int) and 0 <= agent_move_index < len(agent_mon["moves"]):
+            agent_move = agent_mon["moves"][agent_move_index]
+            agent_move_type = agent_move["type"]
+            agent_was_se = get_effectiveness(agent_move_type, player_mon["types"]) >= 2.0
+            agent_was_critical = any("会心一击" in e for e in (getattr(result, "events", []) or []))
+            player_mon["fear"] = accumulate_fear(
+                player_mon.get("fear", 0.0),
+                result.agent_damage,
+                player_mon["max_hp"],
+                player_mon.get("status"),
+                agent_was_se,
+                agent_was_critical,
+            )
+        # 对手宝可梦恐惧值累积
+        player_was_critical = any("会心一击" in e for e in (getattr(result, "events", []) or []))
+        agent_mon["fear"] = accumulate_fear(
+            agent_mon.get("fear", 0.0),
+            0,  # 玩家没攻击
+            agent_mon["max_hp"],
+            agent_mon.get("status"),
+            False,
+            player_was_critical,
+        )
 
     def _validate_move_index(self, pokemon, move_index: int, actor: str):
         moves = pokemon.moves if isinstance(pokemon, BattlePokemon) else pokemon["moves"]
@@ -153,16 +330,26 @@ class TurnOrchestrator:
     # ── Feature 2: 队内聊天 ────────────────────────────────────────────
 
     async def _generate_team_chat(self, bench_results: list[dict]):
-        """Issue 2 修复: 并发执行所有板凳宝可梦的聊天 LLM 调用."""
+        """Issue 2 修复: 并发执行所有板凳宝可梦的聊天 LLM 调用，注入社交关系."""
         bench = self.opponent_team["bench"]
         active = self.opponent_team["active"]
         player = self.player_team["active"]
+        social_graph = load_social_graph()
 
         async def _chat_for(bp):
             voice = self._get_voice(bp)
+            # Feature 2: 计算 bench pokemon 到 active pokemon 的关系值
+            bond = get_bond(social_graph, bp["def_id"], active["def_id"])
+            if bond >= 0.7:
+                bond_hint = "你们关系很好，你的语气应该温暖鼓励，像好朋友一样。"
+            elif bond >= 0.5:
+                bond_hint = "你们关系一般，保持礼貌即可。"
+            else:
+                bond_hint = "你们关系不太好，语气可以冷淡或带点火药味。"
             prompt = (
                 f"你是板凳宝可梦 {bp['name']}，性格{voice}。\n"
                 f"场上队友 {active['name']} 正在战斗，对手是 {player['name']}。\n"
+                f"{bond_hint}\n"
                 f"请对场上队友说一句鼓励或战术建议，用你的性格口吻，1-2句中文，不要输出JSON。"
             )
             raw = await call_llm(
@@ -333,6 +520,13 @@ class TurnOrchestrator:
         # Feature 1: 注入 OpponentModel 预测结果
         opponent_prediction = self.opponent_model.predict()
 
+        # Feature 4: 注入累积的反思洞察
+        insight_section = ""
+        if self._trainer_insights:
+            recent_insights = self._trainer_insights[-3:]  # 最近 3 条
+            insight_lines = [f"  - {insight}" for insight in recent_insights]
+            insight_section = "上回合的反思洞察:\n" + "\n".join(insight_lines) + "\n"
+
         # 格式化工具调用结果注入 prompt
         tool_section = ""
         if tool_results:
@@ -355,7 +549,7 @@ class TurnOrchestrator:
 {move_list}
 板凳意见: {bench_results}
 对手行为预测: {opponent_prediction}
-{tool_section}
+{tool_section}{insight_section}
 先写出你的策略分析和内心想法，然后以JSON格式给出指令，JSON放在```json代码块中：
 {{"suggested_move": "招式名", "strategy": "aggressive/defensive/status", "reasoning": "你的策略分析(中文)"}}"""
 
@@ -371,13 +565,39 @@ class TurnOrchestrator:
             f"  [{i}] {m['name']}({m['type']}, 威力:{m.get('power','-')})"
             for i, m in enumerate(moves)
         )
+        # Feature 1: 读取宝可梦的恐惧状态并应用行为约束
+        fear_val = active.get("fear", 0.0)
+        personality = active.get("personality", {})
+        fear_mult = personality.get("fear_mult", 1.0) if isinstance(personality, dict) else 1.0
+        fear_expression = express_fear(fear_val, fear_mult, personality.get("name", "普通") if isinstance(personality, dict) else "普通")
+        fear_context = ""
+        if fear_expression == "attempt_flee":
+            fear_context = (
+                f"\n【恐惧状态】你的恐惧值已达到 {fear_val:.0%}，你极度害怕，只想逃离战斗。"
+                "你必须拒绝训练师的任何攻击指令，只能选择逃跑或使用状态招式拖延。"
+                "你的 obedience_status 必须是 \"defied\"。"
+            )
+        elif fear_expression == "force_defensive":
+            fear_context = (
+                f"\n【恐惧状态】你的恐惧值较高 ({fear_val:.0%})，你只愿意使用防御或状态招式，拒绝攻击指令。"
+                "如果训练师让你攻击，你应该选择 disobedience_status \"modified\" 并改用防御/状态招式。"
+            )
+        elif fear_expression == "suggest_retreat":
+            fear_context = (
+                f"\n【恐惧状态】你感到有些害怕 (恐惧值: {fear_val:.0%})，你倾向于防御性行动，但还能勉强战斗。"
+            )
+        elif fear_expression == "unease":
+            fear_context = (
+                f"\n【恐惧状态】你略感不安 (恐惧值: {fear_val:.0%})，但还能正常战斗。"
+            )
+
         prompt = f"""你是{active['name']}，一只{'/'.join(active['types'])}宝可梦。
 你的HP:{active['current_hp']}/{active['max_hp']}
 对手{player['name']}({'/'.join(player['types'])}) HP:{player['current_hp']}/{player['max_hp']}
 训练师指令: {trainer_decision.get('suggested_move','无')} (策略:{trainer_decision.get('strategy','未知')})
 你的招式:
 {move_list}
-
+{fear_context}
 先写出你的内心想法和分析过程，然后选择要使用的招式，JSON放在```json代码块中：
 {{"chosen_move_index": 0, "chosen_move_name": "招式名", "confidence": 0.85, "reasoning": "你的决策理由(中文)", "obedience_status": "obeyed/modified/defied"}}"""
 
@@ -446,8 +666,9 @@ class TurnOrchestrator:
     # ── Feature 1: OpponentModel 行为记录 ──────────────────────────────
 
     def _update_behavior_states(self, result, player_move_index: int, pokemon_decision: dict):
-        """Feature 1: 记录玩家出招信息到 OpponentModel."""
+        """Feature 1: 记录玩家出招信息到 OpponentModel 并累积双方恐惧值."""
         player_mon = self.player_team["active"]
+        agent_mon = self.opponent_team["active"]
         if player_move_index < len(player_mon["moves"]):
             player_move = player_mon["moves"][player_move_index]
         else:
@@ -455,12 +676,11 @@ class TurnOrchestrator:
         move_category = player_move.get("category", "attack")
         hp_pct = player_mon["current_hp"] / max(player_mon["max_hp"], 1)
         player_move_type = player_move["type"]
-        agent_types = self.opponent_team["active"]["types"]
+        agent_types = agent_mon["types"]
         was_se = get_effectiveness(player_move_type, agent_types) >= 2.0
         self.opponent_model.record_move(move_category, result.player_damage, hp_pct, was_se)
 
         # Feature 1: 累积玩家宝可梦的恐惧值
-        agent_mon = self.opponent_team["active"]
         agent_move_index = pokemon_decision.get("chosen_move_index", 0)
         if isinstance(agent_move_index, int) and 0 <= agent_move_index < len(agent_mon["moves"]):
             agent_move = agent_mon["moves"][agent_move_index]
@@ -475,6 +695,17 @@ class TurnOrchestrator:
                 agent_was_se,
                 agent_was_critical,
             )
+
+        # Feature 1: 累积对手宝可梦的恐惧值
+        player_was_critical = any("会心一击" in e for e in (getattr(result, "events", []) or []))
+        agent_mon["fear"] = accumulate_fear(
+            agent_mon.get("fear", 0.0),
+            result.player_damage,
+            agent_mon["max_hp"],
+            agent_mon.get("status"),
+            was_se,
+            player_was_critical,
+        )
 
     # ── Feature 4: 训练师工具调用 ─────────────────────────────────────
 

@@ -94,6 +94,11 @@ def _apply_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef,
     return damage
 
 
+def apply_single_move(attacker: BattlePokemon, defender: BattlePokemon, move: MoveDef, events: list[str]) -> int:
+    """公开接口：单个宝可梦对目标使用招式，返回造成的伤害."""
+    return _apply_move(attacker, defender, move, events)
+
+
 def _apply_end_of_turn_effects(pokemon: BattlePokemon, events: list[str]):
     if _is_fainted(pokemon):
         return

@@ -20,7 +20,6 @@ def test_requirements_match_plan_dependencies():
         "httpx",
         "websockets",
         "python-dotenv",
-        "crewai",
         "pytest",
         "pytest-asyncio",
     ]

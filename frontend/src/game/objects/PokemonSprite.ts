@@ -133,10 +133,6 @@ export class PokemonSprite {
     });
   }
 
-  playHit() {
-    this.onHit();
-  }
-
   private applyTexture(key: string) {
     this.sprite.setTexture(key);
     const scale = Math.min(BASE_SCALE, MAX_WIDTH / this.sprite.width, MAX_HEIGHT / this.sprite.height);

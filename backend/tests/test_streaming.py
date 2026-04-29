@@ -1,9 +1,7 @@
 import json
 
 import pytest
-from crewai import Crew
 
-from app.agents.crew_factory import build_opponent_crew
 from app.pipeline.streaming import call_llm, stream_llm
 
 
@@ -73,9 +71,3 @@ async def test_stream_llm_yields_content(monkeypatch):
     chunks = [chunk async for chunk in stream_llm([{"role": "user", "content": "hi"}])]
 
     assert chunks == ["你", "好"]
-
-
-def test_build_opponent_crew_returns_crewai_crew():
-    crew = build_opponent_crew("balanced", active_pokemon=None, bench_pokemon=[], tool_registry=None)
-
-    assert isinstance(crew, Crew)

@@ -208,6 +208,55 @@ async def battle_websocket(websocket: WebSocket, battle_id: str):
                             "data": _public_battle(battle, orchestrator),
                         }
                     )
+            elif message_type == "player_switch":
+                if battle.get("phase") == "ended":
+                    await websocket.send_json({"type": "error", "message": "battle_already_ended"})
+                    continue
+                if battle.get("_turn_in_progress"):
+                    await websocket.send_json({"type": "error", "message": "turn_in_progress"})
+                    continue
+                pokemon_id = message.get("pokemon_id")
+                if not isinstance(pokemon_id, str):
+                    await websocket.send_json({"type": "error", "message": "invalid_pokemon_id"})
+                    continue
+                orchestrator = _get_orchestrator(battle, websocket)
+                bench_idx = next(
+                    (i for i, p in enumerate(orchestrator.player_team["bench"]) if p["def_id"] == pokemon_id),
+                    None,
+                )
+                if bench_idx is None:
+                    await websocket.send_json({"type": "error", "message": "pokemon_not_on_bench"})
+                    continue
+                try:
+                    battle["_turn_in_progress"] = True
+                    result = await orchestrator.execute_switch(bench_idx)
+                finally:
+                    battle["_turn_in_progress"] = False
+                result_data = _serialize_turn_result(result)
+                winner = _record_turn_result(battle, result_data, orchestrator)
+                await websocket.send_json(
+                    {
+                        "type": "turn_result",
+                        "battle_id": battle_id,
+                        "data": result_data,
+                    }
+                )
+                # 广播换人后的队伍状态
+                await websocket.send_json(
+                    {
+                        "type": "team_updated",
+                        "battle_id": battle_id,
+                        "data": _public_battle(battle, orchestrator),
+                    }
+                )
+                if winner:
+                    await websocket.send_json(
+                        {
+                            "type": "battle_ended",
+                            "battle_id": battle_id,
+                            "data": _public_battle(battle, orchestrator),
+                        }
+                    )
             else:
                 await websocket.send_json({"type": "ack", "message_type": message_type, "battle_id": battle_id})
     except WebSocketDisconnect:
