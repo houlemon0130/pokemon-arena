@@ -110,8 +110,16 @@ export type MoveScore = {
   reason: string;
 };
 
-export type AgentDecision = {
-  pokemon_name: string;
+export type TrainerAgentDecision = {
+  agent_type: "trainer";
+  reasoning?: string;
+  suggested_move?: string;
+  strategy?: string;
+};
+
+export type PokemonAgentDecision = {
+  agent_type: "pokemon";
+  pokemon_name?: string;
   chosen_move_index?: number;
   chosen_move_name?: string;
   confidence?: number;
@@ -119,6 +127,8 @@ export type AgentDecision = {
   move_scores?: MoveScore[];
   obedience_status?: "obeyed" | "modified" | "defied" | string;
 };
+
+export type AgentDecision = TrainerAgentDecision | PokemonAgentDecision;
 
 export type AgentInternalState = {
   pokemon_id: string;

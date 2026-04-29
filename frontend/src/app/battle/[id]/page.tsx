@@ -4,12 +4,17 @@ import { useCallback } from "react";
 import { useParams } from "next/navigation";
 
 import { BattleEndOverlay } from "@/components/battle/BattleEndOverlay";
+import { ActivePokemonPanel } from "@/components/battle/ActivePokemonPanel";
 import { BattleCanvas } from "@/components/battle/BattleCanvas";
 import { BattleLog } from "@/components/battle/BattleLog";
 import { BenchPanel } from "@/components/battle/BenchPanel";
+import { CrossTalkPanel } from "@/components/battle/CrossTalkPanel";
 import { MoveSelector } from "@/components/battle/MoveSelector";
 import { OpponentPokemonCard } from "@/components/battle/OpponentPokemonCard";
 import { PlayerPokemonCard } from "@/components/battle/PlayerPokemonCard";
+import { ReflectionCard } from "@/components/battle/ReflectionCard";
+import { TeamChatPanel } from "@/components/battle/TeamChatPanel";
+import { TrainerMindPanel } from "@/components/battle/TrainerMindPanel";
 import { TurnBanner } from "@/components/battle/TurnBanner";
 import { useBattleSocket } from "@/hooks/useBattleSocket";
 import { useBattleStore } from "@/store/battleStore";
@@ -58,6 +63,11 @@ export default function BattlePage() {
           <BattleCanvas />
         </section>
         <aside className="space-y-4">
+          <TrainerMindPanel />
+          <ActivePokemonPanel />
+          <TeamChatPanel />
+          <CrossTalkPanel />
+          <ReflectionCard />
           <BenchPanel />
           <BattleLog events={battleLog} />
         </aside>

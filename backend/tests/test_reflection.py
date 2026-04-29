@@ -173,6 +173,64 @@ async def test_turn_orchestrator_broadcasts_phases_in_order(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_turn_orchestrator_broadcasts_trainer_and_pokemon_decisions(monkeypatch):
+    ws = _WsRecorder()
+    orchestrator = TurnOrchestrator(_team(), _team(), ws)
+
+    async def fake_bench_agent(bp):
+        return {"pokemon_id": bp["def_id"], "message": "ready", "battle_lust": bp["battle_lust"]}
+
+    async def fake_trainer(_bench_results):
+        return {"suggested_move": "Ember", "strategy": "aggressive", "reasoning": "press"}
+
+    async def fake_pokemon(_trainer_decision):
+        return {
+            "chosen_move_index": 0,
+            "chosen_move_name": "Ember",
+            "confidence": 0.85,
+            "reasoning": "I trust the call.",
+            "obedience_status": "obeyed",
+        }
+
+    async def fake_reflection(*args, **kwargs):
+        return {"agent_id": "charmander", "turn": 1, "decision_was_correct": True}
+
+    monkeypatch.setattr(orchestrator, "_run_bench_agent", fake_bench_agent)
+    monkeypatch.setattr(orchestrator, "_run_trainer_agent", fake_trainer)
+    monkeypatch.setattr(orchestrator, "_run_pokemon_agent", fake_pokemon)
+    monkeypatch.setattr("app.pipeline.orchestrator.run_reflection", fake_reflection)
+    monkeypatch.setattr(
+        orchestrator,
+        "_resolve_turn",
+        lambda _player_move_index, _agent_move_index: SimpleNamespace(
+            turn=0,
+            agent_damage=20,
+            player_move="Tackle",
+            player_damage=12,
+        ),
+    )
+
+    await orchestrator.execute_turn(0)
+
+    decisions = [event["data"] for event in ws.events if event["type"] == "agent_decision"]
+    assert decisions == [
+        {
+            "agent_type": "trainer",
+            "reasoning": "press",
+            "suggested_move": "Ember",
+            "strategy": "aggressive",
+        },
+        {
+            "agent_type": "pokemon",
+            "chosen_move_name": "Ember",
+            "confidence": 0.85,
+            "reasoning": "I trust the call.",
+            "obedience_status": "obeyed",
+        },
+    ]
+
+
+@pytest.mark.asyncio
 async def test_turn_orchestrator_rejects_invalid_player_move_before_turn_starts():
     ws = _WsRecorder()
     orchestrator = TurnOrchestrator(_team(), _team(), ws)

@@ -53,7 +53,12 @@ export function useBattleSocket(battleId: string | null | undefined) {
             s.setAgentThinking(true);
             break;
           case "agent_decision":
-            s.addAgentDecision(message.data as AgentDecision);
+            {
+              const decision = message.data as AgentDecision;
+              if (decision.agent_type === "trainer" || decision.agent_type === "pokemon") {
+                s.addAgentDecision(decision);
+              }
+            }
             s.setAgentThinking(false);
             break;
           case "tool_call":

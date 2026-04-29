@@ -45,9 +45,15 @@ class TurnOrchestrator:
 
         await self.ws.broadcast({"type": "phase_change", "data": {"phase": "trainer_strategy"}})
         trainer_decision = await self._run_trainer_agent(bench_results)
+        await self.ws.broadcast(
+            {"type": "agent_decision", "data": self._trainer_decision_payload(trainer_decision)}
+        )
 
         await self.ws.broadcast({"type": "phase_change", "data": {"phase": "pokemon_decide"}})
         pokemon_decision = await self._run_pokemon_agent(trainer_decision)
+        await self.ws.broadcast(
+            {"type": "agent_decision", "data": self._pokemon_decision_payload(pokemon_decision)}
+        )
 
         await self.ws.broadcast({"type": "phase_change", "data": {"phase": "resolving"}})
         result = self._resolve_turn(player_move_index, pokemon_decision["chosen_move_index"])
@@ -137,6 +143,23 @@ class TurnOrchestrator:
 选择你要使用的招式，以JSON格式输出：
 {{"chosen_move_index": 0, "chosen_move_name": "招式名", "confidence": 0.85, "reasoning": "你的决策理由(中文)", "obedience_status": "obeyed/modified/defied"}}"""
         return await call_llm([{"role": "user", "content": prompt}], temperature=0.7, max_tokens=300)
+
+    def _trainer_decision_payload(self, trainer_decision: dict) -> dict:
+        return {
+            "agent_type": "trainer",
+            "reasoning": trainer_decision.get("reasoning", ""),
+            "suggested_move": trainer_decision.get("suggested_move", ""),
+            "strategy": trainer_decision.get("strategy", ""),
+        }
+
+    def _pokemon_decision_payload(self, pokemon_decision: dict) -> dict:
+        return {
+            "agent_type": "pokemon",
+            "chosen_move_name": pokemon_decision.get("chosen_move_name", ""),
+            "confidence": pokemon_decision.get("confidence", 0),
+            "reasoning": pokemon_decision.get("reasoning", ""),
+            "obedience_status": pokemon_decision.get("obedience_status", ""),
+        }
 
     def _resolve_turn(self, player_move_index: int, agent_move_index: int):
         player_mon = self._as_battle_pokemon(self.player_team["active"])
