@@ -153,16 +153,9 @@ async def test_turn_orchestrator_broadcasts_phases_in_order(monkeypatch):
     async def fake_pokemon(_trainer_decision):
         return {"chosen_move_index": 0, "chosen_move_name": "Ember", "obedience_status": "obeyed"}
 
-    async def fake_reflection(*args, **kwargs):
-        return {"agent_id": "charmander", "turn": 1, "decision_was_correct": True}
-
     monkeypatch.setattr(orchestrator, "_run_bench_agent", fake_bench_agent)
     monkeypatch.setattr(orchestrator, "_run_trainer_agent", fake_trainer)
     monkeypatch.setattr(orchestrator, "_run_pokemon_agent", fake_pokemon)
-    monkeypatch.setattr("app.pipeline.orchestrator.run_reflection", fake_reflection)
-    # Mock new methods added in features 2 & 4
-    monkeypatch.setattr(orchestrator, "_generate_team_chat", _async_noop)
-    monkeypatch.setattr(orchestrator, "_generate_cross_talk", _async_noop)
     monkeypatch.setattr(orchestrator, "_execute_trainer_tools", _async_noop)
     monkeypatch.setattr(
         orchestrator,
@@ -178,7 +171,7 @@ async def test_turn_orchestrator_broadcasts_phases_in_order(monkeypatch):
     await orchestrator.execute_turn(0)
 
     phases = [event["data"]["phase"] for event in ws.events if event["type"] == "phase_change"]
-    assert phases == ["bench_observe", "trainer_strategy", "pokemon_decide", "resolving", "reflection"]
+    assert phases == ["bench_observe", "trainer_strategy", "pokemon_decide", "resolving"]
 
 
 @pytest.mark.asyncio
@@ -201,16 +194,9 @@ async def test_turn_orchestrator_broadcasts_trainer_and_pokemon_decisions(monkey
             "obedience_status": "obeyed",
         }
 
-    async def fake_reflection(*args, **kwargs):
-        return {"agent_id": "charmander", "turn": 1, "decision_was_correct": True}
-
     monkeypatch.setattr(orchestrator, "_run_bench_agent", fake_bench_agent)
     monkeypatch.setattr(orchestrator, "_run_trainer_agent", fake_trainer)
     monkeypatch.setattr(orchestrator, "_run_pokemon_agent", fake_pokemon)
-    monkeypatch.setattr("app.pipeline.orchestrator.run_reflection", fake_reflection)
-    # Mock new methods
-    monkeypatch.setattr(orchestrator, "_generate_team_chat", _async_noop)
-    monkeypatch.setattr(orchestrator, "_generate_cross_talk", _async_noop)
     monkeypatch.setattr(orchestrator, "_execute_trainer_tools", _async_noop)
     monkeypatch.setattr(
         orchestrator,
@@ -270,16 +256,9 @@ async def test_bench_agents_run_concurrently(monkeypatch):
     async def fake_pokemon(_trainer_decision):
         return {"chosen_move_index": 0, "chosen_move_name": "Ember", "obedience_status": "obeyed"}
 
-    async def fake_reflection(*args, **kwargs):
-        return {"agent_id": "charmander", "turn": 1, "decision_was_correct": True}
-
     monkeypatch.setattr(orchestrator, "_run_bench_agent", slow_bench_agent)
     monkeypatch.setattr(orchestrator, "_run_trainer_agent", fake_trainer)
     monkeypatch.setattr(orchestrator, "_run_pokemon_agent", fake_pokemon)
-    monkeypatch.setattr("app.pipeline.orchestrator.run_reflection", fake_reflection)
-    # Mock new methods
-    monkeypatch.setattr(orchestrator, "_generate_team_chat", _async_noop)
-    monkeypatch.setattr(orchestrator, "_generate_cross_talk", _async_noop)
     monkeypatch.setattr(orchestrator, "_execute_trainer_tools", _async_noop)
     monkeypatch.setattr(
         orchestrator,
@@ -358,16 +337,3 @@ async def test_update_behavior_states_records_player_move(monkeypatch):
     assert recorded_calls[0]["move_type"] == "special"
     assert recorded_calls[0]["damage"] == 40
     assert recorded_calls[0]["was_se"] is False  # Fire vs Fire is not super effective
-
-
-@pytest.mark.asyncio
-async def test_get_voice_extracts_narrative_voice():
-    """验证 _get_voice 正确提取 narrative_voice."""
-    pokemon = {
-        "name": "皮卡丘",
-        "personality": {"narrative_voice": "顽皮而好动", "name": "顽皮"},
-    }
-    assert TurnOrchestrator._get_voice(pokemon) == "顽皮而好动"
-
-    pokemon_no_personality = {"name": "未知"}
-    assert TurnOrchestrator._get_voice(pokemon_no_personality) == "普通"

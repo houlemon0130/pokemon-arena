@@ -4,11 +4,9 @@ import logging
 import re
 
 from app.agents.prompts.bench import build_bench_system_prompt, build_bench_turn_message
-from app.agents.reflection import run_reflection
 from app.behavior.battle_lust import accumulate_battle_lust
 from app.behavior.fear import accumulate_fear, express_fear
 from app.behavior.opponent_model import OpponentModel
-from app.behavior.social import get_bond, load_social_graph
 from app.engine.battle import _apply_end_of_turn_effects, apply_single_move, resolve_turn
 from app.engine.type_chart import get_effectiveness
 from app.models.battle import BattlePokemon
@@ -29,11 +27,7 @@ class TurnOrchestrator:
         self.tools = ToolRegistry()
         self.opponent_model = OpponentModel()
         self.turn = 0
-        self.reflections = []
         self.disconnected = False
-        # Feature 4: 反思洞察累积，影响后续回合
-        self._trainer_insights: list[str] = []
-        self._cumulative_confidence_delta: float = 0.0
 
     async def _broadcast_safe(self, event: dict):
         """安全广播，捕获连接异常后设置 disconnected 标志."""
@@ -70,9 +64,6 @@ class TurnOrchestrator:
         if self.disconnected:
             return None
 
-        # Feature 2: 队内聊天 — 板凳宝可梦对场上队友鼓励/建议
-        await self._generate_team_chat(bench_results)
-
         await self._broadcast_safe({"type": "phase_change", "data": {"phase": "trainer_strategy"}})
         if self.disconnected:
             return None
@@ -93,9 +84,6 @@ class TurnOrchestrator:
         await self._broadcast_safe(
             {"type": "agent_decision", "data": self._pokemon_decision_payload(pokemon_decision)}
         )
-
-        # Feature 2: 跨队对话 — 上场宝可梦对玩家说垃圾话
-        await self._generate_cross_talk(pokemon_decision)
 
         await self._broadcast_safe({"type": "phase_change", "data": {"phase": "resolving"}})
         if self.disconnected:
@@ -128,24 +116,6 @@ class TurnOrchestrator:
         result.turn = self.turn
         # Feature 1: 传入 player_move_index，记录玩家行为
         self._update_behavior_states(result, player_move_index, pokemon_decision)
-
-        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "reflection"}})
-        if self.disconnected:
-            return None
-        reflection = await run_reflection(
-            self.opponent_team["active"]["def_id"],
-            pokemon_decision,
-            result,
-            self.opponent_team["active"].get("personality"),
-        )
-        self.reflections.append(reflection)
-        await self._broadcast_safe({"type": "reflection_result", "data": reflection})
-
-        # Feature 4: 根据反思结果更新后续回合的行为参数
-        if reflection.get("decision_was_correct") is False:
-            self._cumulative_confidence_delta -= 0.05
-        if reflection.get("learned_insight"):
-            self._trainer_insights.append(reflection["learned_insight"])
 
         return result
 
@@ -185,8 +155,6 @@ class TurnOrchestrator:
         if self.disconnected:
             return None
 
-        await self._generate_team_chat(bench_results)
-
         await self._broadcast_safe({"type": "phase_change", "data": {"phase": "trainer_strategy"}})
         tool_results = await self._execute_trainer_tools()
 
@@ -201,8 +169,6 @@ class TurnOrchestrator:
             {"type": "agent_decision", "data": self._pokemon_decision_payload(pokemon_decision)}
         )
 
-        await self._generate_cross_talk(pokemon_decision)
-
         await self._broadcast_safe({"type": "phase_change", "data": {"phase": "resolving"}})
         if self.disconnected:
             return None
@@ -212,24 +178,6 @@ class TurnOrchestrator:
         result.turn = self.turn
         # 记录行为（玩家没有出招）
         self._update_behavior_states_switch(result, pokemon_decision)
-
-        await self._broadcast_safe({"type": "phase_change", "data": {"phase": "reflection"}})
-        if self.disconnected:
-            return None
-        reflection = await run_reflection(
-            self.opponent_team["active"]["def_id"],
-            pokemon_decision,
-            result,
-            self.opponent_team["active"].get("personality"),
-        )
-        self.reflections.append(reflection)
-        await self._broadcast_safe({"type": "reflection_result", "data": reflection})
-
-        # Feature 4: 根据反思结果更新后续回合的行为参数
-        if reflection.get("decision_was_correct") is False:
-            self._cumulative_confidence_delta -= 0.05
-        if reflection.get("learned_insight"):
-            self._trainer_insights.append(reflection["learned_insight"])
 
         return result
 
@@ -327,103 +275,6 @@ class TurnOrchestrator:
             "message": message or "我还在观察局势。",
         }
 
-    # ── Feature 2: 队内聊天 ────────────────────────────────────────────
-
-    async def _generate_team_chat(self, bench_results: list[dict]):
-        """Issue 2 修复: 并发执行所有板凳宝可梦的聊天 LLM 调用，注入社交关系."""
-        bench = self.opponent_team["bench"]
-        active = self.opponent_team["active"]
-        player = self.player_team["active"]
-        social_graph = load_social_graph()
-
-        async def _chat_for(bp):
-            voice = self._get_voice(bp)
-            # Feature 2: 计算 bench pokemon 到 active pokemon 的关系值
-            bond = get_bond(social_graph, bp["def_id"], active["def_id"])
-            if bond >= 0.7:
-                bond_hint = "你们关系很好，你的语气应该温暖鼓励，像好朋友一样。"
-            elif bond >= 0.5:
-                bond_hint = "你们关系一般，保持礼貌即可。"
-            else:
-                bond_hint = "你们关系不太好，语气可以冷淡或带点火药味。"
-            prompt = (
-                f"你是板凳宝可梦 {bp['name']}，性格{voice}。\n"
-                f"场上队友 {active['name']} 正在战斗，对手是 {player['name']}。\n"
-                f"{bond_hint}\n"
-                f"请对场上队友说一句鼓励或战术建议，用你的性格口吻，1-2句中文，不要输出JSON。"
-            )
-            raw = await call_llm(
-                [{"role": "user", "content": prompt}],
-                temperature=0.8,
-                max_tokens=80,
-                json_mode=False,
-            )
-            content = (
-                raw.get("content", "").strip()
-                if isinstance(raw, dict)
-                else str(raw).strip()
-            )
-            return {
-                "pokemon_id": bp["def_id"],
-                "pokemon_name": bp["name"],
-                "content": content or f"{bp['name']}为队友加油！",
-            }
-
-        results = await asyncio.gather(*(_chat_for(bp) for bp in bench))
-        for r in results:
-            await self._broadcast_safe({
-                "type": "chat_message",
-                "data": {
-                    "turn": self.turn,
-                    "from_agent": f"bench:{r['pokemon_id']}",
-                    "channel": "team",
-                    "content": r["content"],
-                },
-            })
-
-    # ── Feature 2: 跨队对话 ────────────────────────────────────────────
-
-    async def _generate_cross_talk(self, pokemon_decision: dict):
-        """上场宝可梦对玩家说垃圾话."""
-        active = self.opponent_team["active"]
-        voice = self._get_voice(active)
-        prompt = (
-            f"你是{active['name']}，一只{'/'.join(active['types'])}宝可梦，性格{voice}。\n"
-            f"你刚使用了{pokemon_decision.get('chosen_move_name', '招式')}。\n"
-            f"请对玩家说一句垃圾话，用你的性格口吻，1句中文，不要输出JSON。"
-        )
-        raw = await call_llm(
-            [{"role": "user", "content": prompt}],
-            temperature=0.9,
-            max_tokens=60,
-            json_mode=False,
-        )
-        content = (
-            raw.get("content", "").strip()
-            if isinstance(raw, dict)
-            else str(raw).strip()
-        )
-        await self._broadcast_safe({
-            "type": "chat_message",
-            "data": {
-                "turn": self.turn,
-                "from_agent": active["def_id"],
-                "to_agent": "player",
-                "channel": "cross_team",
-                "content": content or f"{active['name']}挑衅地看着你！",
-            },
-        })
-
-    @staticmethod
-    def _get_voice(pokemon) -> str:
-        """安全提取 personality 的 narrative_voice."""
-        personality = pokemon.get("personality") if isinstance(pokemon, dict) else getattr(pokemon, "personality", None)
-        if personality is None:
-            return "普通"
-        if isinstance(personality, dict):
-            return personality.get("narrative_voice", "普通")
-        return getattr(personality, "narrative_voice", "普通")
-
     # ── Feature 3: 流式 Agent 思考 ─────────────────────────────────────
 
     async def _stream_and_broadcast(
@@ -520,13 +371,6 @@ class TurnOrchestrator:
         # Feature 1: 注入 OpponentModel 预测结果
         opponent_prediction = self.opponent_model.predict()
 
-        # Feature 4: 注入累积的反思洞察
-        insight_section = ""
-        if self._trainer_insights:
-            recent_insights = self._trainer_insights[-3:]  # 最近 3 条
-            insight_lines = [f"  - {insight}" for insight in recent_insights]
-            insight_section = "上回合的反思洞察:\n" + "\n".join(insight_lines) + "\n"
-
         # 格式化工具调用结果注入 prompt
         tool_section = ""
         if tool_results:
@@ -549,7 +393,7 @@ class TurnOrchestrator:
 {move_list}
 板凳意见: {bench_results}
 对手行为预测: {opponent_prediction}
-{tool_section}{insight_section}
+{tool_section}
 先写出你的策略分析和内心想法，然后以JSON格式给出指令，JSON放在```json代码块中：
 {{"suggested_move": "招式名", "strategy": "aggressive/defensive/status", "reasoning": "你的策略分析(中文)"}}"""
 
