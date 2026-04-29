@@ -29,9 +29,10 @@ function textureKey(name: string, side: PokemonSpriteSide) {
   return `pokemon-${side}-${toShowdownSpriteId(name)}`;
 }
 
-function spriteUrl(name: string, side: PokemonSpriteSide) {
-  const directory = side === "back" ? "ani-back" : "ani";
-  return `https://play.pokemonshowdown.com/sprites/${directory}/${toShowdownSpriteId(name)}.gif`;
+function spritePath(name: string, side: PokemonSpriteSide) {
+  const id = toShowdownSpriteId(name);
+  const suffix = side === "back" ? "-back" : "";
+  return `/sprites/${id}${suffix}.gif`;
 }
 
 export class PokemonSprite {
@@ -72,8 +73,7 @@ export class PokemonSprite {
     }
 
     this.sprite.setVisible(false);
-    this.scene.load.setCORS("anonymous");
-    this.scene.load.image(key, spriteUrl(pokemonName, side));
+    this.scene.load.image(key, spritePath(pokemonName, side));
     this.scene.load.once(`filecomplete-image-${key}`, () => {
       if (this.sprite.scene && this.pokemonName === pokemonName && this.side === side) {
         this.applyTexture(key);

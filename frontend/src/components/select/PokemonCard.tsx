@@ -1,7 +1,5 @@
 "use client";
 
-import Image from "next/image";
-
 import type { PokemonDef } from "@/lib/types";
 
 type PokemonCardProps = {
@@ -12,7 +10,6 @@ type PokemonCardProps = {
 };
 
 export function PokemonCard({ pokemon, selected, selectedOrder, onToggle }: PokemonCardProps) {
-  const englishName = pokemon.id.charAt(0).toUpperCase() + pokemon.id.slice(1);
 
   return (
     <button
@@ -51,12 +48,9 @@ export function PokemonCard({ pokemon, selected, selectedOrder, onToggle }: Poke
           <dt>SPD</dt>
           <dd className="text-zinc-200">{pokemon.stats.speed}</dd>
         </dl>
-        <Image
-          src={`https://play.pokemonshowdown.com/sprites/ani/${englishName}.gif`}
+        <img
+          src={`/sprites/${pokemon.id}.gif`}
           alt={pokemon.name}
-          width={96}
-          height={96}
-          unoptimized
           className="h-24 w-24 object-contain [image-rendering:pixelated]"
         />
       </div>
