@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 
 export class HPBar {
   private readonly bar: Phaser.GameObjects.Graphics;

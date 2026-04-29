@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 
 import { ElectricEffect } from "../effects/ElectricEffect";
 import { FireEffect } from "../effects/FireEffect";
