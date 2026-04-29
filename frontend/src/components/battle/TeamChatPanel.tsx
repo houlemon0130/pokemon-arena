@@ -1,12 +1,12 @@
 "use client";
 
-import { useBattleStore } from "@/store/battleStore";
+import type { ChatMessage } from "@/lib/types";
 
-export function TeamChatPanel() {
-  // Issue: 改为 channel === "team" 精确匹配队内聊天
-  const messages = useBattleStore((state) =>
-    state.chatMessages.filter((message) => message.channel === "team"),
-  );
+type TeamChatPanelProps = {
+  messages: ChatMessage[];
+};
+
+export function TeamChatPanel({ messages }: TeamChatPanelProps) {
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
       <h2 className="text-sm font-semibold text-zinc-100">队内聊天</h2>

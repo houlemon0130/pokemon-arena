@@ -1,9 +1,12 @@
 "use client";
 
-import { useBattleStore } from "@/store/battleStore";
+import type { ChatMessage } from "@/lib/types";
 
-export function CrossTalkPanel() {
-  const messages = useBattleStore((state) => state.chatMessages.filter((message) => message.channel === "cross_team"));
+type CrossTalkPanelProps = {
+  messages: ChatMessage[];
+};
+
+export function CrossTalkPanel({ messages }: CrossTalkPanelProps) {
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
       <h2 className="text-sm font-semibold text-zinc-100">跨队对话</h2>

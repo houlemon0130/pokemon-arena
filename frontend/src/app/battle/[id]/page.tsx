@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 
 import { BattleEndOverlay } from "@/components/battle/BattleEndOverlay";
@@ -18,17 +18,27 @@ import { TrainerMindPanel } from "@/components/battle/TrainerMindPanel";
 import { TurnBanner } from "@/components/battle/TurnBanner";
 import { useBattleSocket } from "@/hooks/useBattleSocket";
 import { useBattleStore } from "@/store/battleStore";
+import type { AgentDecision, ChatMessage, ReflectionResult, ToolCall } from "@/lib/types";
 
 export default function BattlePage() {
   const params = useParams<{ id: string }>();
+
+  // Single subscription point — all child components are pure presentational
   const battleState = useBattleStore((state) => state.battleState);
   const selectedMove = useBattleStore((state) => state.selectedMove);
   const setSelectedMove = useBattleStore((state) => state.setSelectedMove);
   const battleLog = useBattleStore((state) => state.battleLog);
+  const chatMessages = useBattleStore((state) => state.chatMessages);
+  const agentDecisions = useBattleStore((state) => state.agentDecisions);
+  const agentStreams = useBattleStore((state) => state.agentStreams);
+  const toolCalls = useBattleStore((state) => state.toolCalls);
+  const reflections = useBattleStore((state) => state.reflections);
+
   const { sendMessage } = useBattleSocket(params.id);
+
   const playerPokemon = battleState?.player_team?.active;
   const opponentPokemon = battleState?.opponent_team?.active;
-  const moves = playerPokemon?.moves ?? [];
+  const moves = useMemo(() => playerPokemon?.moves ?? [], [playerPokemon?.moves]);
 
   const handleSelectMove = useCallback(
     (index: number) => {
@@ -46,7 +56,16 @@ export default function BattlePage() {
     [sendMessage],
   );
 
-  const benchPokemon = battleState?.player_team?.bench ?? [];
+  const benchPokemon = useMemo(() => battleState?.player_team?.bench ?? [], [battleState?.player_team?.bench]);
+
+  // Derived data for child components
+  const teamMessages = useMemo(() => chatMessages.filter((m) => m.channel === "team"), [chatMessages]);
+  const crossTeamMessages = useMemo(() => chatMessages.filter((m) => m.channel === "cross_team"), [chatMessages]);
+  const benchMessages = useMemo(() => chatMessages.filter((m) => m.channel === "bench" || m.from_agent?.startsWith("bench")), [chatMessages]);
+  const lastTrainerDecision = useMemo(() => agentDecisions.findLast((d) => d.agent_type === "trainer") ?? null, [agentDecisions]);
+  const lastPokemonDecision = useMemo(() => agentDecisions.findLast((d) => d.agent_type === "pokemon") ?? null, [agentDecisions]);
+  const lastReflection = useMemo(() => reflections.at(-1) ?? null, [reflections]);
+  const lastTools = useMemo(() => toolCalls.slice(-4), [toolCalls]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -99,12 +118,12 @@ export default function BattlePage() {
           <BattleCanvas />
         </section>
         <aside className="space-y-4">
-          <TrainerMindPanel />
-          <ActivePokemonPanel />
-          <TeamChatPanel />
-          <CrossTalkPanel />
-          <ReflectionCard />
-          <BenchPanel />
+          <TrainerMindPanel latest={lastTrainerDecision} streamText={agentStreams["trainer"] ?? ""} tools={lastTools} />
+          <ActivePokemonPanel latest={lastPokemonDecision} streamText={agentStreams["pokemon"] ?? ""} />
+          <TeamChatPanel messages={teamMessages} />
+          <CrossTalkPanel messages={crossTeamMessages} />
+          <ReflectionCard reflection={lastReflection} />
+          <BenchPanel messages={benchMessages} />
           <BattleLog events={battleLog} />
         </aside>
       </div>

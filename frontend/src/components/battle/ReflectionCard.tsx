@@ -1,9 +1,12 @@
 "use client";
 
-import { useBattleStore } from "@/store/battleStore";
+import type { ReflectionResult } from "@/lib/types";
 
-export function ReflectionCard() {
-  const reflection = useBattleStore((state) => state.reflections.at(-1));
+type ReflectionCardProps = {
+  reflection: ReflectionResult | null;
+};
+
+export function ReflectionCard({ reflection }: ReflectionCardProps) {
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
       <h2 className="text-sm font-semibold text-zinc-100">复盘</h2>

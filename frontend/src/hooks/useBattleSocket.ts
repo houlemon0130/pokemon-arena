@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { unstable_batchedUpdates } from "react-dom";
 
 import {
   applyTurnResultToBattleState,
@@ -26,9 +27,7 @@ export function useBattleSocket(battleId: string | null | undefined) {
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (!battleId) {
-      return;
-    }
+    if (!battleId) return;
 
     let shouldReconnect = true;
 
@@ -42,74 +41,102 @@ export function useBattleSocket(battleId: string | null | undefined) {
 
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as BattleSocketMessage;
-        const s = useBattleStore.getState();
+        unstable_batchedUpdates(() => {
+        const store = useBattleStore.getState();
+
         switch (message.type) {
-          case "phase_change":
-            s.addBattleLog(`Phase: ${(message.data as { phase?: string })?.phase ?? "unknown"}`);
-            s.setAgentThinking(true);
-            // Clear previous agent streams when entering a new phase
-            s.clearAgentStreams();
+          case "phase_change": {
+            const phase = (message.data as { phase?: string })?.phase ?? "unknown";
+            useBattleStore.setState({
+              battleLog: [...store.battleLog, `Phase: ${phase}`],
+              isAgentThinking: true,
+              agentStreams: {},
+            });
             break;
-          case "agent_stream":
-            {
-              const data = message.data as { agent_id: string; chunk: string; replace?: boolean };
-              s.appendAgentStream(data.agent_id, data.chunk, data.replace ?? false);
-            }
+          }
+          case "agent_stream": {
+            const data = message.data as { agent_id: string; chunk: string; replace?: boolean };
+            const prev = store.agentStreams[data.agent_id] ?? "";
+            useBattleStore.setState({
+              agentStreams: {
+                ...store.agentStreams,
+                [data.agent_id]: data.replace ? data.chunk : prev + data.chunk,
+              },
+            });
             break;
-          case "agent_decision":
-            {
-              const decision = message.data as AgentDecision;
-              if (decision.agent_type === "trainer" || decision.agent_type === "pokemon") {
-                s.addAgentDecision(decision);
-              }
-            }
+          }
+          case "agent_decision": {
+            const decision = message.data as AgentDecision;
+            const isAgent = decision.agent_type === "trainer" || decision.agent_type === "pokemon";
+            useBattleStore.setState({
+              agentDecisions: isAgent ? [...store.agentDecisions, decision] : store.agentDecisions,
+              isAgentThinking: false,
+            });
             break;
+          }
           case "tool_call":
-            s.addToolCall(message.data as ToolCall);
+            useBattleStore.setState({
+              toolCalls: [...store.toolCalls, message.data as ToolCall],
+            });
             break;
           case "reflection_result":
-            s.addReflection(message.data as ReflectionResult);
+            useBattleStore.setState({
+              reflections: [...store.reflections, message.data as ReflectionResult],
+            });
             break;
           case "chat_message":
-            s.addChatMessage(message.data as ChatMessage);
+            useBattleStore.setState({
+              chatMessages: [...store.chatMessages, message.data as ChatMessage],
+            });
             break;
           case "bench_opinion":
-            s.addChatMessage(benchOpinionToChatMessage(message.data as BenchOpinion));
+            useBattleStore.setState({
+              chatMessages: [...store.chatMessages, benchOpinionToChatMessage(message.data as BenchOpinion)],
+            });
             break;
           case "battle_started":
-            s.setBattleState(message.data as BattleStateV2);
-            s.addBattleLog("对战开始");
+            useBattleStore.setState({
+              battleState: message.data as BattleStateV2,
+              battleLog: [...store.battleLog, "对战开始"],
+            });
             break;
           case "turn_animation":
-            s.setTurnAnimation(normalizeTurnAnimation(message.data, useBattleStore.getState().battleState));
+            useBattleStore.setState({
+              turnAnimation: normalizeTurnAnimation(message.data, store.battleState),
+            });
             break;
-          case "turn_result":
-            s.setAgentThinking(false);
-            {
-              const result = message.data as TurnResult | undefined;
-              if (result) {
-                const currentState = useBattleStore.getState().battleState;
-                s.setTurnAnimation(deriveTurnAnimation(currentState, result));
-                s.setBattleState(applyTurnResultToBattleState(currentState, result));
-                result.events.forEach((event) => s.addBattleLog(event));
-              }
+          case "turn_result": {
+            const result = message.data as TurnResult | undefined;
+            if (result) {
+              const currentState = store.battleState;
+              const newBattleState = applyTurnResultToBattleState(currentState, result);
+              const newAnimation = deriveTurnAnimation(currentState, result);
+              useBattleStore.setState({
+                isAgentThinking: false,
+                turnAnimation: newAnimation,
+                battleState: newBattleState,
+                battleLog: [...store.battleLog, ...result.events],
+              });
             }
             break;
-          case "battle_ended":
-            {
-              const endedState = message.data as BattleStateV2 | undefined;
-              if (endedState) {
-                s.setBattleState(endedState);
-              }
-              s.addBattleLog(`Winner: ${endedState?.winner ?? "unknown"}`);
-            }
+          }
+          case "battle_ended": {
+            const endedState = message.data as BattleStateV2 | undefined;
+            useBattleStore.setState({
+              battleState: endedState ?? store.battleState,
+              battleLog: [...store.battleLog, `Winner: ${endedState?.winner ?? "unknown"}`],
+            });
             break;
+          }
           case "error":
-            s.addBattleLog(message.message ?? "WebSocket error");
+            useBattleStore.setState({
+              battleLog: [...store.battleLog, message.message ?? "WebSocket error"],
+            });
             break;
           default:
             break;
         }
+        }); // unstable_batchedUpdates
       };
 
       socket.onclose = () => {
@@ -123,9 +150,7 @@ export function useBattleSocket(battleId: string | null | undefined) {
 
     return () => {
       shouldReconnect = false;
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current);
-      }
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       socketRef.current?.close();
     };
   }, [battleId]);

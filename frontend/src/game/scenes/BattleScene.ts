@@ -57,12 +57,11 @@ export class BattleScene extends Phaser.Scene {
       this.playTurnAnimation(initialStore.turnAnimation);
     }
 
-    this.unsubscribeStore = useBattleStore.subscribe((state, previousState) => {
-      if (state.battleState !== previousState.battleState) {
+    // Prevent Zustand v5 synchronous subscriber from causing infinite React re-renders
+    this.unsubscribeStore = useBattleStore.subscribe((state) => {
+      // Only react to specific state changes using refs to avoid state read issues
+      if (this.currentBattleState !== state.battleState) {
         this.syncBattleState(state.battleState);
-      }
-      if (state.turnAnimation && state.turnAnimation.id !== previousState.turnAnimation?.id) {
-        this.playTurnAnimation(state.turnAnimation);
       }
     });
 
