@@ -10,7 +10,8 @@ export function BattleCanvas() {
     let mounted = true;
 
     async function mount() {
-      const Phaser = (await import("phaser")).default;
+      const PhaserModule = await import("phaser");
+      const Phaser = PhaserModule.default ?? PhaserModule;
       const { createBattleGameConfig } = await import("@/game/config");
       if (!mounted || gameRef.current || !containerRef.current) {
         return;

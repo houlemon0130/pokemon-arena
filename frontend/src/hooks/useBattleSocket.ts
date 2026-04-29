@@ -24,10 +24,6 @@ const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
 export function useBattleSocket(battleId: string | null | undefined) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  // Get actions from the store directly — they are stable references
-  const storeActions = useRef(useBattleStore.getState());
-  useEffect(() => { storeActions.current = useBattleStore.getState(); });
-  const getStore = () => storeActions.current;
 
   useEffect(() => {
     if (!battleId) {
@@ -45,8 +41,8 @@ export function useBattleSocket(battleId: string | null | undefined) {
       };
 
       socket.onmessage = (event) => {
-        const s = getStore();
         const message = JSON.parse(event.data) as BattleSocketMessage;
+        const s = useBattleStore.getState();
         switch (message.type) {
           case "phase_change":
             s.addBattleLog(`Phase: ${(message.data as { phase?: string })?.phase ?? "unknown"}`);
